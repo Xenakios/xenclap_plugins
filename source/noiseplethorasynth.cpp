@@ -95,7 +95,7 @@ class NoisePlethoraGUI
                 return result;
             });
 
-        m_webview->navigate(R"(C:\develop\AudioPluginHost_mk2\Source\Plugins\noiseplethora.html)");
+        m_webview->navigate(R"(C:\develop\xen_clap_plugins\source\noiseplethora.html)");
     }
     std::unique_ptr<choc::ui::WebView> m_webview;
 
