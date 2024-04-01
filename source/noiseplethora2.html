@@ -82,8 +82,6 @@
                 canvas.id = cid;
                 canvas.width = XyControlSize;
                 canvas.height = XyControlSize;
-                // canvas.style.zIndex = 8;
-                // canvas.style.position = "absolute";
                 canvas.style.border = "1px solid";
                 this.canvas = canvas;
                 this.ctx = canvas.getContext("2d");
@@ -171,7 +169,6 @@
         document.getElementById(divid).style.fontSize=14;
         document.getElementById(divid).appendChild(lab);
         
-        
         let slid1 = document.createElement("input");
         slid1.type = "range";
         slid1.id = slid_id;
@@ -183,8 +180,6 @@
         else
             slid1.step = 0.01;
         slid1.value = defaultval;
-        // slid1.style = "rangeWrap";
-        // slid1.clapchannel = 0;
         slid1.addEventListener("input", updateValue);
         document.getElementById(divid).appendChild(slid1);
         let br = document.createElement("br");
@@ -192,7 +187,6 @@
         sliders[slid_id] = slid1;
         
         let vallab = document.createTextNode("foo");
-        // document.getElementById(divid).style.fontSize=14;
         document.getElementById(divid).appendChild(vallab);
         valuelabels[slid_id] = vallab;
         let br1 = document.createElement("br");
@@ -215,20 +209,11 @@
       createSlider(10,"Sustain",0.0,1.0,0.75,null,"group_volpan");
       createSlider(11,"Release",0.0,1.0,0.1,null,"group_volpan");
       xycontrols.push(xy2);      
-      //    xy1 = new XYControl("B",10,"Cutoff",0.0,127.0,11,"Resonance",0.01,0.99,120.0,0.01);
-      //    xy2 = new XYControl("C",0,"Pan",-1.0,1.0,1,"Volume",-48.0,0.0,0.0,-6.0);
-
-        //for (var i=0;i<result.length;++i)
-        //{
-        //    let id = result[i].id;
-        //    createSlider(id,result[i].name,result[i].
-        //      minval,result[i].maxval,result[i].val,result[i].step);
-        //}
+      
     });
 
     setInterval(onMyTimer,50);
-    var canv = document.getElementById("myCanvas");
-    // var ctx = canv.getContext("2d");
+    
     function onMyTimer()
     {
       getParameterUpdates([]).then((result) =>
@@ -238,7 +223,6 @@
         xycontrols[2].modvalues = [];
         for (var i=0;i<result.length;++i)
         {
-          // console.log(result[i]);
           var id = result[i].id;
           if (id<10000)
           {
@@ -247,10 +231,6 @@
           } else
           {
             xycontrols[0].addModValues(result[i].x,result[i].y,result[i].gain);
-            // xycontrols[2].addModValues(result[i].gain,null);
-            //ctx.beginPath();
-            //ctx.arc(result[i].x*250, 250.0-result[i].y*250, 20.0*result[i].gain, 0, 2 * Math.PI);
-            //ctx.fill();
           }
           
         }
@@ -261,7 +241,6 @@
 
     function updateValue(e) 
     {
-      // console.log("slider moved " + e.target.value);  
       onSliderMoved({id : e.target.id, value : e.target.value}).then((result) =>
       {
         valuelabels[e.target.id].textContent = result;
