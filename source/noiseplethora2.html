@@ -6,16 +6,18 @@
       display: flex;
       flex-direction: column;
       padding: 5px;
-      justify-content: space-between;
+      
       background-color: DodgerBlue; 
       color : white; 
+      gap: 5px; 
     }
     
     .xycontrolsstyle {
-    display: flex;
-    padding: 10px;
-    justify-content: space-between;
-    background-color: DodgerBlue;
+      display: flex;
+      padding: 10px;
+      justify-content: space-between;
+      background-color: DodgerBlue;
+      font-family: 'Courier New', monospace;
     }
     
     .foodiv {
@@ -182,8 +184,8 @@
         slid1.value = defaultval;
         slid1.addEventListener("input", updateValue);
         document.getElementById(divid).appendChild(slid1);
-        let br = document.createElement("br");
-        document.getElementById(divid).appendChild(br);
+        //let br = document.createElement("br");
+        //document.getElementById(divid).appendChild(br);
         sliders[slid_id] = slid1;
         
         let vallab = document.createTextNode("foo");
@@ -191,6 +193,8 @@
         valuelabels[slid_id] = vallab;
         let br1 = document.createElement("br");
         document.getElementById(divid).appendChild(br1);
+        //let finaldiv = document.createElement("div");
+        //document.getElementById(divid).appendChild(finaldiv);
     }
     var xycontrols = [];
     // result from c++ is an async promise! so we need to deal with that like this...
