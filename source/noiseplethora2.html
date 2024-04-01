@@ -164,11 +164,14 @@
           }
 
     var sliders = {};
+    var valuelabels = {};
     function createSlider(slid_id,slid_label,minval,maxval,defaultval,step,divid)
     {
         let lab = document.createTextNode(slid_label);
         document.getElementById(divid).style.fontSize=14;
         document.getElementById(divid).appendChild(lab);
+        
+        
         let slid1 = document.createElement("input");
         slid1.type = "range";
         slid1.id = slid_id;
@@ -187,6 +190,13 @@
         let br = document.createElement("br");
         document.getElementById(divid).appendChild(br);
         sliders[slid_id] = slid1;
+        
+        let vallab = document.createTextNode("foo");
+        // document.getElementById(divid).style.fontSize=14;
+        document.getElementById(divid).appendChild(vallab);
+        valuelabels[slid_id] = vallab;
+        let br1 = document.createElement("br");
+        document.getElementById(divid).appendChild(br1);
     }
     var xycontrols = [];
     // result from c++ is an async promise! so we need to deal with that like this...
@@ -233,6 +243,7 @@
           if (id<10000)
           {
             sliders[id].value = result[i].val;
+            valuelabels[id].textContent = result[i].str;
           } else
           {
             xycontrols[0].addModValues(result[i].x,result[i].y,result[i].gain);
@@ -251,7 +262,10 @@
     function updateValue(e) 
     {
       // console.log("slider moved " + e.target.value);  
-      onSliderMoved({id : e.target.id, value : e.target.value});
+      onSliderMoved({id : e.target.id, value : e.target.value}).then((result) =>
+      {
+        valuelabels[e.target.id].textContent = result;
+      });
     }
 </script>
 </html>

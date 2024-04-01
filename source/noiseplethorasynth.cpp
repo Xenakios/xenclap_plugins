@@ -25,15 +25,26 @@ class NoisePlethoraGUI
 {
   public:
     std::vector<ParamDesc> m_paramDescs;
+    std::unordered_map<clap_id, ParamDesc *> m_idToParamdesc;
     CommFIFO &m_to_proc_fifo;
     CommFIFO &m_from_proc_fifo;
     NoisePlethoraGUI(std::vector<ParamDesc> paramDescs, CommFIFO &outfifo, CommFIFO &infifo,
                      std::function<float(int)> pargetfunc)
         : m_paramDescs(paramDescs), m_to_proc_fifo(outfifo), m_from_proc_fifo(infifo)
     {
+        for (auto &pd : m_paramDescs)
+        {
+            m_idToParamdesc[pd.id] = &pd;
+        }
         choc::ui::WebView::Options opts;
         opts.enableDebugMode = true;
         m_webview = std::make_unique<choc::ui::WebView>(opts);
+        m_webview->bind("getParameterText",
+                        [this](const choc::value::ValueView &args) -> choc::value::Value {
+                            auto parid = args[0]["id"].get<int>();
+                            auto value = args[0]["value"].get<double>();
+                            return choc::value::Value{};
+                        });
         m_webview->bind("getParameterUpdates",
                         [this](const choc::value::ValueView &args) -> choc::value::Value {
                             auto result = choc::value::createEmptyArray();
@@ -45,6 +56,10 @@ class NoisePlethoraGUI
                                     auto info = choc::value::createObject("parupdate");
                                     info.setMember("id", (int64_t)msg.parid);
                                     info.setMember("val", msg.values[0]);
+                                    auto pd = m_idToParamdesc[msg.parid];
+                                    auto str = pd->valueToString(msg.values[0]);
+                                    if (str)
+                                        info.setMember("str", *str);
                                     result.addArrayElement(info);
                                 }
                                 if (msg.type >= 10000)
@@ -71,6 +86,10 @@ class NoisePlethoraGUI
                             msg.values[0] = value;
                             msg.parid = parid;
                             m_to_proc_fifo.push(msg);
+                            auto pd = m_idToParamdesc[msg.parid];
+                            auto str = pd->valueToString(msg.values[0]);
+                            if (str)
+                                return choc::value::Value{*str};
                             return choc::value::Value{};
                         });
         m_webview->bind(
