@@ -1,13 +1,22 @@
 <html>
 <style>
     
-        
-        .xycontrolsstyle {
-        display: flex;
-        padding: 10px;
-        justify-content: space-between;
-        background-color: DodgerBlue;
-        }
+    .paramgroup 
+    {
+      display: flex;
+      flex-direction: column;
+      padding: 5px;
+      justify-content: space-between;
+      background-color: DodgerBlue; 
+      color : white; 
+    }
+    
+    .xycontrolsstyle {
+    display: flex;
+    padding: 10px;
+    justify-content: space-between;
+    background-color: DodgerBlue;
+    }
     
     .foodiv {
       width: 100%;
@@ -46,22 +55,33 @@
     </style>
 
 <body style="background-color:rgb(201, 191, 191);">
-    <div id="foodiv" class="xycontrolsstyle"> </div>
-    <canvas id="myCanvas" width="250" height="250" style="border:1px solid #000000;">
-    </canvas>
+    <div id="maindiv" class="xycontrolsstyle"> 
+      <div id="group_xy" class="paramgroup"> </div>
+      <div id="group_filter" class="paramgroup"> </div>
+      <div id="group_volpan" class="paramgroup"> </div></div>
+    
 </body>
 
 <script>
     function mapvalue(in_val, in_min, in_max, out_min, out_max) {
             return (in_val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
         }
-        class XYControl {
-            constructor(cid,xparid, xparname, xminval, xmaxval, yparid, yparname, yminval, ymaxval, defx, defy) 
+    function limitvalue(in_val, min_val, max_val)
+    {
+      if (in_val<min_val)
+        return min_val;
+      if (in_val>max_val)
+        return max_val;
+      return in_val;
+    }
+    XyControlSize = 200;    
+    class XYControl {
+            constructor(cid,xparid, xparname, xminval, xmaxval, yparid, yparname, yminval, ymaxval, defx, defy, divid) 
             {
                 var canvas = document.createElement('canvas');
                 canvas.id = cid;
-                canvas.width = 150;
-                canvas.height = 150;
+                canvas.width = XyControlSize;
+                canvas.height = XyControlSize;
                 // canvas.style.zIndex = 8;
                 // canvas.style.position = "absolute";
                 canvas.style.border = "1px solid";
@@ -83,47 +103,72 @@
                     this.isdragging = false; 
                     this.draw();
                 });
-                document.getElementById("foodiv").appendChild(canvas);
+                document.getElementById(divid).appendChild(canvas);
                 this.xparid = xparid;
                 this.xparname = xparname;
                 this.xminval = xminval;
                 this.xmaxval = xmaxval;
                 this.xdefault = defx;
                 this.xval = defx;
+                
                 this.yparid = yparid;
                 this.yparname = yparname;
                 this.yminval = yminval;
                 this.ymaxval = ymaxval;
                 this.ydefault = defy;
+                
                 this.yval = defy;
                 this.isdragging = false;
+                this.modvalues = [];
+                
+                this.draw();
+            }
+            
+            addModValues(xm, ym, gval)
+            {
+              this.modvalues.push([xm,ym,gval]);
+              
             }
             updateValuesFromCoords(xc,yc)
             {
                 var rect = this.canvas.getBoundingClientRect();
-                this.xval = mapvalue(xc-rect.left,0.0,150.0,this.xminval,this.xmaxval);
-                this.yval = mapvalue(yc-rect.top,0.0,150.0,this.ymaxval,this.yminval);
-                // console.log(this.xval);
+                this.xval = mapvalue(xc-rect.left,0.0,XyControlSize,this.xminval,this.xmaxval);
+                this.xval = limitvalue(this.xval,this.xminval,this.xmaxval);
+                this.yval = mapvalue(yc-rect.top,0.0,XyControlSize,this.ymaxval,this.yminval);
+                this.yval = limitvalue(this.yval,this.yminval,this.ymaxval);
+                // ideally, we'd check which value has changed, but
+                // it's pretty likely both changed anyway...
                 onSliderMoved({id : this.xparid, value : this.xval});
                 onSliderMoved({id : this.yparid, value : this.yval});
             }
             draw()
             {
-                this.ctx.clearRect(0,0,150,150);
+                this.ctx.clearRect(0,0,XyControlSize,XyControlSize);
+                this.ctx.fillStyle = "black";
                 this.ctx.beginPath();
-                let xcor = mapvalue(this.xval,this.xminval,this.xmaxval,0.0,150.0);
-                let ycor = mapvalue(this.yval,this.yminval,this.ymaxval,150.0,0.0);
+                let xcor = mapvalue(this.xval,this.xminval,this.xmaxval,0.0,XyControlSize);
+                let ycor = mapvalue(this.yval,this.yminval,this.ymaxval,XyControlSize,0.0);
                 this.ctx.arc(xcor, ycor, 10.0, 0, 2 * Math.PI);
                 this.ctx.fill();
+                this.ctx.fillStyle = "white";
+                for (var i=0;i<this.modvalues.length;++i)
+                {
+                  this.ctx.beginPath();
+                  let xcor = mapvalue(this.modvalues[i][0],this.xminval,this.xmaxval,0.0,XyControlSize);
+                  let ycor = mapvalue(this.modvalues[i][1],this.yminval,this.ymaxval,XyControlSize,0.0);
+                  let radius = this.modvalues[i][2] * 20.0;
+                  this.ctx.arc(xcor, ycor, radius, 0, 2 * Math.PI);
+                  this.ctx.fill();
+                }
             }
           }
 
     var sliders = {};
-    function createSlider(slid_id,slid_label,minval,maxval,defaultval,step)
+    function createSlider(slid_id,slid_label,minval,maxval,defaultval,step,divid)
     {
         let lab = document.createTextNode(slid_label);
-        document.getElementById("foodiv").style.fontSize=12;
-        document.getElementById("foodiv").appendChild(lab);
+        document.getElementById(divid).style.fontSize=14;
+        document.getElementById(divid).appendChild(lab);
         let slid1 = document.createElement("input");
         slid1.type = "range";
         slid1.id = slid_id;
@@ -138,20 +183,27 @@
         // slid1.style = "rangeWrap";
         // slid1.clapchannel = 0;
         slid1.addEventListener("input", updateValue);
-        document.getElementById("foodiv").appendChild(slid1);
+        document.getElementById(divid).appendChild(slid1);
         let br = document.createElement("br");
-        document.getElementById("foodiv").appendChild(br);
+        document.getElementById(divid).appendChild(br);
         sliders[slid_id] = slid1;
     }
     var xycontrols = [];
     // result from c++ is an async promise! so we need to deal with that like this...
     getParameters([]).then ((result) => 
     { 
-      xy0 = new XYControl("A",1,"X",0.0,1.0,2,"Y",0.0,1.0,0.5,0.5);
+      xy0 = new XYControl("A",1,"X",0.0,1.0,2,"Y",0.0,1.0,0.5,0.5,"group_xy");
+      createSlider(6,"Algorithm",0,29,0,1,"group_xy");
+      createSlider(12,"Key tracking mode",0,5,0,1,"group_xy");
       xycontrols.push(xy0);
-      xy1 = new XYControl("B",3,"Cutoff",24.0,127.0,4,"Resonance",0.01,.99,120.0,0.01);
+      xy1 = new XYControl("B",3,"Cutoff",24.0,127.0,4,"Resonance",0.01,.99,120.0,0.01,"group_filter");
+      createSlider(5,"Filter type",0,5,0,1,"group_filter");
       xycontrols.push(xy1);
-      xy2 = new XYControl("C",7,"Pan",-1.0,1.0,0,"Volume",-48.0,9,0.0,0.01);
+      xy2 = new XYControl("C",7,"Pan",-1.0,1.0,0,"Volume",-48.0,9,0.0,0.01,"group_volpan");
+      createSlider(8,"Attack",0.0,1.0,0.1,null,"group_volpan");
+      createSlider(9,"Decay",0.0,1.0,0.1,null,"group_volpan");
+      createSlider(10,"Sustain",0.0,1.0,0.75,null,"group_volpan");
+      createSlider(11,"Release",0.0,1.0,0.1,null,"group_volpan");
       xycontrols.push(xy2);      
       //    xy1 = new XYControl("B",10,"Cutoff",0.0,127.0,11,"Resonance",0.01,0.99,120.0,0.01);
       //    xy2 = new XYControl("C",0,"Pan",-1.0,1.0,1,"Volume",-48.0,0.0,0.0,-6.0);
@@ -166,12 +218,14 @@
 
     setInterval(onMyTimer,50);
     var canv = document.getElementById("myCanvas");
-    var ctx = canv.getContext("2d");
+    // var ctx = canv.getContext("2d");
     function onMyTimer()
     {
       getParameterUpdates([]).then((result) =>
       {
-        ctx.clearRect(0,0,250,250);
+        // ctx.clearRect(0,0,250,250);
+        xycontrols[0].modvalues = [];
+        xycontrols[2].modvalues = [];
         for (var i=0;i<result.length;++i)
         {
           // console.log(result[i]);
@@ -181,12 +235,16 @@
             sliders[id].value = result[i].val;
           } else
           {
-            ctx.beginPath();
-            ctx.arc(result[i].x*250, 250.0-result[i].y*250, 20.0*result[i].gain, 0, 2 * Math.PI);
-            ctx.fill();
+            xycontrols[0].addModValues(result[i].x,result[i].y,result[i].gain);
+            // xycontrols[2].addModValues(result[i].gain,null);
+            //ctx.beginPath();
+            //ctx.arc(result[i].x*250, 250.0-result[i].y*250, 20.0*result[i].gain, 0, 2 * Math.PI);
+            //ctx.fill();
           }
           
         }
+        xycontrols[0].draw();
+        xycontrols[2].draw();
       });     
     }
 

@@ -16,7 +16,7 @@ struct UiMessage
     UiMessage() {}
     int type = 0;
     clap_id parid = CLAP_INVALID_ID;
-    float values[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float values[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 using CommFIFO = choc::fifo::SingleReaderSingleWriterFIFO<UiMessage>;
@@ -47,10 +47,10 @@ class NoisePlethoraGUI
                                     info.setMember("val", msg.values[0]);
                                     result.addArrayElement(info);
                                 }
-                                if (msg.type == 10000)
+                                if (msg.type >= 10000)
                                 {
                                     auto info = choc::value::createObject("xy");
-                                    info.setMember("id", 10000);
+                                    info.setMember("id", msg.type);
                                     info.setMember("x", msg.values[0]);
                                     info.setMember("y", msg.values[1]);
                                     info.setMember("gain", msg.values[2]);
@@ -493,12 +493,13 @@ struct xen_noise_plethora
 
         if (m_gui)
         {
-            for (auto &v : m_synth.m_voices)
+            for (size_t i = 0; i < m_synth.m_voices.size(); ++i)
             {
+                auto &v = m_synth.m_voices[i];
                 if (v->m_voice_active)
                 {
                     UiMessage msg;
-                    msg.type = 10000;
+                    msg.type = 10000 + i;
                     msg.values[0] = v->totalx;
                     msg.values[1] = v->totaly;
                     msg.values[2] = v->total_gain;
