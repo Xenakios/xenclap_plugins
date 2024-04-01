@@ -16,6 +16,112 @@
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 
+struct Grain
+{
+    Grain() : m_lanczos(44100.0f, 44100.0f) {}
+    double m_src_samplerate = 0.0;
+    double m_out_samplerate = 0.0;
+    double m_start_pos = 0.0;
+    double m_end_pos = 1.0;
+    int m_source_playpos = 0;
+    int m_output_playpos = 0;
+    int m_duration_samples = 0;
+    double m_playrate = 1.0;
+    choc::buffer::ChannelArrayView<float> m_src_view;
+    sst::basic_blocks::dsp::LanczosResampler<128> m_lanczos;
+    bool m_active = false;
+    void activate(double duration, double pitch, double startPosInSource)
+    {
+        m_active = true;
+        m_duration_samples = duration * m_out_samplerate;
+        m_playrate = std::pow(2.0, pitch / 12.0);
+        m_source_playpos = m_src_view.getNumFrames() * startPosInSource;
+    }
+};
+
+struct GrainEngine
+{
+    int maxNumGrains = 8;
+    std::vector<std::unique_ptr<Grain>> m_grains;
+    GrainEngine()
+    {
+        for (int i = 0; i < maxNumGrains; ++i)
+        {
+            auto g = std::make_unique<Grain>();
+            m_grains.push_back(std::move(g));
+        }
+    }
+    int m_sourcebuf_len = 0;
+    void setBuffer(choc::buffer::ChannelArrayView<float> view, double sr, double startpos,
+                   double endpos)
+    {
+        m_sourcebuf_len = view.getNumFrames();
+        for (auto &g : m_grains)
+        {
+            g->m_src_view = view;
+            g->m_src_samplerate = sr;
+            g->m_start_pos = startpos;
+            g->m_end_pos = endpos;
+        }
+    }
+    void prepare(int maxBufSize, double outsr)
+    {
+        m_out_sr = outsr;
+        m_grainmix_buffer =
+            choc::buffer::ChannelArrayBuffer<float>(choc::buffer::Size(2, maxBufSize));
+    }
+    void initGrain(double len, double posinsource)
+    {
+        for (auto &g : m_grains)
+        {
+            if (!g->m_active)
+            {
+                g->activate(len, m_pitch, posinsource);
+            }
+        }
+    }
+    void processBlock(choc::buffer::ChannelArrayView<float> bv)
+    {
+        bv.clear();
+        m_grainmix_buffer.clear();
+        double grainratehz = std::pow(2.0, m_grain_rate);
+        double grainlensecs = (1.0 / grainratehz) * m_grain_overlap;
+        int fc = bv.getNumFrames();
+        for (int i = 0; i < fc; ++i)
+        {
+            if (m_grain_phasor == 0.0)
+            {
+                initGrain(grainlensecs, m_source_pos);
+            }
+            m_grain_phasor += m_out_sr / grainratehz;
+            if (m_grain_phasor >= m_out_sr)
+            {
+                m_grain_phasor = 0.0;
+            }
+            m_source_pos += m_playrate;
+            if (m_source_pos >= m_sourcebuf_len)
+            {
+                m_source_pos = 0.0;
+            }
+        }
+        for(auto& g : m_grains)
+        {
+            if (g->m_active)
+            {
+                
+            }
+        }
+    }
+    choc::buffer::ChannelArrayBuffer<float> m_grainmix_buffer;
+    double m_out_sr = 0;
+    double m_grain_rate = 4.0; // time octaves
+    double m_grain_overlap = 1.0;
+    double m_playrate = 1.0;
+    double m_pitch = 0.0;
+    double m_grain_phasor = 0.0;
+    double m_source_pos = 0.0;
+};
+
 struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                                      clap::helpers::CheckingLevel::Maximal>
 {
@@ -39,6 +145,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
     choc::buffer::ChannelArrayBuffer<float> workBuffer;
     sst::basic_blocks::dsp::LanczosResampler<128> m_lanczos{44100.0f, 44100.0f};
     signalsmith::stretch::SignalsmithStretch<float> m_stretch;
+    GrainEngine m_grain_eng;
     void loadAudioFile(std::string path)
     {
         auto reader = fmtList.createReader(path);
@@ -53,6 +160,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                 fileProps = props;
                 fileBuffer = readbuf;
                 m_buf_playpos = 0;
+                m_grain_eng.setBuffer(fileBuffer.getView(), props.sampleRate, 0.0, 1.0);
             }
         }
     }
@@ -137,6 +245,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
             choc::buffer::ChannelArrayBuffer<float>(choc::buffer::Size(2, maxFrameCount * 16));
         workBuffer.clear();
         m_stretch.presetDefault(2, sampleRate_);
+        m_grain_eng.prepare(maxFrameCount, sampleRate_);
         return true;
     }
     bool implementsParams() const noexcept override { return true; }
@@ -307,7 +416,6 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                 m_buf_playpos = loop_end_samples - 1;
                 m_buf_playpos_float = loop_end_samples - 1;
             }
-                
         };
         if (playmode == 0)
         {
