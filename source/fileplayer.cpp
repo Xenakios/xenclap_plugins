@@ -37,6 +37,17 @@ struct Grain
         m_playrate = std::pow(2.0, pitch / 12.0);
         m_source_playpos = m_src_view.getNumFrames() * startPosInSource;
     }
+    void process(float *outs)
+    {
+        double ogain = 1.0;
+        if (m_output_playpos < m_duration_samples / 2)
+            ogain =
+                xenakios::mapvalue<float>(m_output_playpos, 0, m_duration_samples / 2, 0.0, 1.0);
+        if (m_output_playpos >= m_duration_samples / 2)
+            ogain = xenakios::mapvalue<float>(m_output_playpos, m_duration_samples / 2,
+                                              m_duration_samples, 1.0, 0.0);
+        
+    }
 };
 
 struct GrainEngine
@@ -77,6 +88,7 @@ struct GrainEngine
             if (!g->m_active)
             {
                 g->activate(len, m_pitch, posinsource);
+                break;
             }
         }
     }
@@ -87,11 +99,22 @@ struct GrainEngine
         double grainratehz = std::pow(2.0, m_grain_rate);
         double grainlensecs = (1.0 / grainratehz) * m_grain_overlap;
         int fc = bv.getNumFrames();
+
         for (int i = 0; i < fc; ++i)
         {
             if (m_grain_phasor == 0.0)
             {
                 initGrain(grainlensecs, m_source_pos);
+            }
+            for (auto &g : m_grains)
+            {
+                float grainouts[2] = {0.0f, 0.0f};
+                if (g->m_active)
+                {
+                    g->process(grainouts);
+                    bv.getSample(0, i) = grainouts[0];
+                    bv.getSample(1, i) = grainouts[1];
+                }
             }
             m_grain_phasor += m_out_sr / grainratehz;
             if (m_grain_phasor >= m_out_sr)
@@ -102,13 +125,6 @@ struct GrainEngine
             if (m_source_pos >= m_sourcebuf_len)
             {
                 m_source_pos = 0.0;
-            }
-        }
-        for(auto& g : m_grains)
-        {
-            if (g->m_active)
-            {
-                
             }
         }
     }
