@@ -224,7 +224,7 @@ class NoisePlethoraVoice
     float eg_decay = 0.5f;
     float eg_sustain = 0.75f;
     float eg_release = 0.5f;
-    int keytrackMode = 1;
+    int keytrackMode = 0;
     std::function<void(int, int, int, int)> DeativatedVoiceCallback;
     float totalx = 0.0f;
     float totaly = 0.0f;

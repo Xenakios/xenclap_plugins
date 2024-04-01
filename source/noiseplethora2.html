@@ -1,0 +1,199 @@
+<html>
+<style>
+    
+        
+        .xycontrolsstyle {
+        display: flex;
+        padding: 10px;
+        justify-content: space-between;
+        background-color: DodgerBlue;
+        }
+    
+    .foodiv {
+      width: 100%;
+    }
+    
+    .slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 20px;
+      background: #d3d3d3;
+      outline: none;
+      opacity: 0.7;
+      -webkit-transition: .2s;
+      transition: opacity .2s;
+    }
+    
+    .slider:hover {
+      opacity: 1;
+    }
+    
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #04AA6D;
+      cursor: pointer;
+    }
+    
+    .slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #04AA6D;
+      cursor: pointer;
+    }
+    </style>
+
+<body style="background-color:rgb(201, 191, 191);">
+    <div id="foodiv" class="xycontrolsstyle"> </div>
+    <canvas id="myCanvas" width="250" height="250" style="border:1px solid #000000;">
+    </canvas>
+</body>
+
+<script>
+    function mapvalue(in_val, in_min, in_max, out_min, out_max) {
+            return (in_val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+        }
+        class XYControl {
+            constructor(cid,xparid, xparname, xminval, xmaxval, yparid, yparname, yminval, ymaxval, defx, defy) 
+            {
+                var canvas = document.createElement('canvas');
+                canvas.id = cid;
+                canvas.width = 150;
+                canvas.height = 150;
+                // canvas.style.zIndex = 8;
+                // canvas.style.position = "absolute";
+                canvas.style.border = "1px solid";
+                this.canvas = canvas;
+                this.ctx = canvas.getContext("2d");
+                canvas.addEventListener('mousedown', (event) => {
+                    this.isdragging = true;
+                    this.updateValuesFromCoords(event.clientX,event.clientY);
+                    this.draw();
+                });
+                canvas.addEventListener('mousemove', (event) => { 
+                    if (this.isdragging)
+                    {
+                        this.updateValuesFromCoords(event.clientX,event.clientY);
+                        this.draw();
+                    }
+                });
+                canvas.addEventListener('mouseup', (event) => { 
+                    this.isdragging = false; 
+                    this.draw();
+                });
+                document.getElementById("foodiv").appendChild(canvas);
+                this.xparid = xparid;
+                this.xparname = xparname;
+                this.xminval = xminval;
+                this.xmaxval = xmaxval;
+                this.xdefault = defx;
+                this.xval = defx;
+                this.yparid = yparid;
+                this.yparname = yparname;
+                this.yminval = yminval;
+                this.ymaxval = ymaxval;
+                this.ydefault = defy;
+                this.yval = defy;
+                this.isdragging = false;
+            }
+            updateValuesFromCoords(xc,yc)
+            {
+                var rect = this.canvas.getBoundingClientRect();
+                this.xval = mapvalue(xc-rect.left,0.0,150.0,this.xminval,this.xmaxval);
+                this.yval = mapvalue(yc-rect.top,0.0,150.0,this.ymaxval,this.yminval);
+                // console.log(this.xval);
+                onSliderMoved({id : this.xparid, value : this.xval});
+                onSliderMoved({id : this.yparid, value : this.yval});
+            }
+            draw()
+            {
+                this.ctx.clearRect(0,0,150,150);
+                this.ctx.beginPath();
+                let xcor = mapvalue(this.xval,this.xminval,this.xmaxval,0.0,150.0);
+                let ycor = mapvalue(this.yval,this.yminval,this.ymaxval,150.0,0.0);
+                this.ctx.arc(xcor, ycor, 10.0, 0, 2 * Math.PI);
+                this.ctx.fill();
+            }
+          }
+
+    var sliders = {};
+    function createSlider(slid_id,slid_label,minval,maxval,defaultval,step)
+    {
+        let lab = document.createTextNode(slid_label);
+        document.getElementById("foodiv").style.fontSize=12;
+        document.getElementById("foodiv").appendChild(lab);
+        let slid1 = document.createElement("input");
+        slid1.type = "range";
+        slid1.id = slid_id;
+        slid1.min = minval;
+        slid1.max = maxval;
+        slid1.className = "slider";
+        if (step!=null)
+            slid1.step = step;
+        else
+            slid1.step = 0.01;
+        slid1.value = defaultval;
+        // slid1.style = "rangeWrap";
+        // slid1.clapchannel = 0;
+        slid1.addEventListener("input", updateValue);
+        document.getElementById("foodiv").appendChild(slid1);
+        let br = document.createElement("br");
+        document.getElementById("foodiv").appendChild(br);
+        sliders[slid_id] = slid1;
+    }
+    var xycontrols = [];
+    // result from c++ is an async promise! so we need to deal with that like this...
+    getParameters([]).then ((result) => 
+    { 
+      xy0 = new XYControl("A",1,"X",0.0,1.0,2,"Y",0.0,1.0,0.5,0.5);
+      xycontrols.push(xy0);
+      xy1 = new XYControl("B",3,"Cutoff",24.0,127.0,4,"Resonance",0.01,.99,120.0,0.01);
+      xycontrols.push(xy1);
+      xy2 = new XYControl("C",7,"Pan",-1.0,1.0,0,"Volume",-48.0,9,0.0,0.01);
+      xycontrols.push(xy2);      
+      //    xy1 = new XYControl("B",10,"Cutoff",0.0,127.0,11,"Resonance",0.01,0.99,120.0,0.01);
+      //    xy2 = new XYControl("C",0,"Pan",-1.0,1.0,1,"Volume",-48.0,0.0,0.0,-6.0);
+
+        //for (var i=0;i<result.length;++i)
+        //{
+        //    let id = result[i].id;
+        //    createSlider(id,result[i].name,result[i].
+        //      minval,result[i].maxval,result[i].val,result[i].step);
+        //}
+    });
+
+    setInterval(onMyTimer,50);
+    var canv = document.getElementById("myCanvas");
+    var ctx = canv.getContext("2d");
+    function onMyTimer()
+    {
+      getParameterUpdates([]).then((result) =>
+      {
+        ctx.clearRect(0,0,250,250);
+        for (var i=0;i<result.length;++i)
+        {
+          // console.log(result[i]);
+          var id = result[i].id;
+          if (id<10000)
+          {
+            sliders[id].value = result[i].val;
+          } else
+          {
+            ctx.beginPath();
+            ctx.arc(result[i].x*250, 250.0-result[i].y*250, 20.0*result[i].gain, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+          
+        }
+      });     
+    }
+
+    function updateValue(e) 
+    {
+      // console.log("slider moved " + e.target.value);  
+      onSliderMoved({id : e.target.id, value : e.target.value});
+    }
+</script>
+</html>

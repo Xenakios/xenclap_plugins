@@ -95,7 +95,7 @@ class NoisePlethoraGUI
                 return result;
             });
 
-        m_webview->navigate(R"(C:\develop\xen_clap_plugins\source\noiseplethora.html)");
+        m_webview->navigate(R"(C:\develop\xen_clap_plugins\source\noiseplethora2.html)");
     }
     std::unique_ptr<choc::ui::WebView> m_webview;
 
@@ -288,7 +288,7 @@ struct xen_noise_plethora
         return true;
     }
     static constexpr size_t numParams = 13;
-    float paramValues[numParams];
+    std::array<float, numParams> paramValues;
     bool paramsValue(clap_id paramId, double *value) noexcept override
     {
         if (value && paramId >= 0 && paramId < numParams)
