@@ -25,7 +25,10 @@ class SignalSmoother
     }
     void setSlope(double x) { m_slope = x; }
     double getSlope() const { return m_slope; }
-
+    void setValueImmediate(double x)
+    {
+        m_history = x;
+    }
   private:
     float m_history = 0.0f;
     float m_slope = 0.999f;
@@ -151,9 +154,9 @@ class NoisePlethoraVoice
         m_gain_smoother.setSlope(0.999);
         m_pan_smoother.setSlope(0.999);
         float g = xenakios::decibelsToGain(basevalues.volume);
+        m_pan_smoother.setValueImmediate(basevalues.pan);
         for (int i = 0; i < 2048; ++i)
         {
-            m_pan_smoother.process(basevalues.pan);
             m_gain_smoother.process(g);
         }
         for (auto &p : m_plugs)
@@ -352,7 +355,7 @@ class NoisePlethoraSynth
 {
   public:
     using voice_t = NoisePlethoraVoice;
-    static constexpr size_t maxVoiceCount = 16;
+    static constexpr size_t maxVoiceCount = 32;
     sst::voicemanager::VoiceManager<NoisePlethoraSynth, NoisePlethoraSynth> m_voice_manager;
 
     NoisePlethoraSynth() : m_voice_manager(*this)
