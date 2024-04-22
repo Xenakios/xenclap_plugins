@@ -25,10 +25,8 @@ class SignalSmoother
     }
     void setSlope(double x) { m_slope = x; }
     double getSlope() const { return m_slope; }
-    void setValueImmediate(double x)
-    {
-        m_history = x;
-    }
+    void setValueImmediate(double x) { m_history = x; }
+
   private:
     float m_history = 0.0f;
     float m_slope = 0.999f;
@@ -142,7 +140,7 @@ class NoisePlethoraVoice
             }
         }
     }
-    double hipasscutoff = 12.0;
+    double hipasscutoff = 24.0;
     void prepare(double sampleRate)
     {
         m_sr_provider.samplerate = sampleRate;
@@ -291,47 +289,47 @@ class NoisePlethoraVoice
             sst::basic_blocks::dsp::pan_laws::monoEqualPower(smoothedpan, panmat);
             float finalgain = smoothedgain * envgain;
             total_gain = finalgain;
-            float out = plug->processGraph() * finalgain;
-            float outL = panmat[0] * out;
-            float outR = panmat[3] * out;
-
-            dcblocker.step<StereoSimperSVF::HP>(dcblocker, outL, outR);
+            float out = plug->processGraph();
+            float dummy = 0.0f;
+            dcblocker.step<StereoSimperSVF::HP>(dcblocker, out, dummy);
             switch (ftype)
             {
             case StereoSimperSVF::LP:
             {
-                filter.step<StereoSimperSVF::LP>(filter, outL, outR);
+                filter.step<StereoSimperSVF::LP>(filter, out, dummy);
                 break;
             }
             case StereoSimperSVF::HP:
             {
-                filter.step<StereoSimperSVF::HP>(filter, outL, outR);
+                filter.step<StereoSimperSVF::HP>(filter, out, dummy);
                 break;
             }
             case StereoSimperSVF::BP:
             {
-                filter.step<StereoSimperSVF::BP>(filter, outL, outR);
+                filter.step<StereoSimperSVF::BP>(filter, out, dummy);
                 break;
             }
             case StereoSimperSVF::PEAK:
             {
-                filter.step<StereoSimperSVF::PEAK>(filter, outL, outR);
+                filter.step<StereoSimperSVF::PEAK>(filter, out, dummy);
                 break;
             }
             case StereoSimperSVF::NOTCH:
             {
-                filter.step<StereoSimperSVF::NOTCH>(filter, outL, outR);
+                filter.step<StereoSimperSVF::NOTCH>(filter, out, dummy);
                 break;
             }
             case StereoSimperSVF::ALL:
             {
-                filter.step<StereoSimperSVF::ALL>(filter, outL, outR);
+                filter.step<StereoSimperSVF::ALL>(filter, out, dummy);
                 break;
             }
             default:
                 break;
             };
-
+            out *= finalgain;
+            float outL = panmat[0] * out;
+            float outR = panmat[3] * out;
             destBuf.getSample(0, i) += outL;
             destBuf.getSample(1, i) += outR;
         }
