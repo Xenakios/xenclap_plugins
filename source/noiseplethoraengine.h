@@ -265,19 +265,13 @@ class NoisePlethoraVoice
         double totalpan = reflect_value(0.0f, basepan + modvalues.pan, 1.0f);
 
         StereoSimperSVF::Mode ftype = (StereoSimperSVF::Mode)(int)basevalues.filttype;
-
+        auto chansdata = destBuf.data.channels;
         for (size_t i = 0; i < destBuf.size.numFrames; ++i)
         {
             if (m_update_counter == 0)
             {
                 m_vol_env.processBlock(eg_attack, eg_decay, eg_sustain, eg_release, 1, 1, 1,
                                        m_eg_gate);
-                if (m_vol_env.stage == EnvType::s_eoc)
-                {
-                    m_voice_active = false;
-                    if (DeativatedVoiceCallback)
-                        DeativatedVoiceCallback(port_id, chan, key, note_id);
-                }
             }
             float envgain = m_vol_env.outputCache[m_update_counter];
             ++m_update_counter;
@@ -330,8 +324,14 @@ class NoisePlethoraVoice
             out *= finalgain;
             float outL = panmat[0] * out;
             float outR = panmat[3] * out;
-            destBuf.getSample(0, i) += outL;
-            destBuf.getSample(1, i) += outR;
+            chansdata[0][i] += outL;
+            chansdata[1][i] += outR;
+        }
+        if (m_vol_env.stage == EnvType::s_eoc)
+        {
+            m_voice_active = false;
+            if (DeativatedVoiceCallback)
+                DeativatedVoiceCallback(port_id, chan, key, note_id);
         }
     }
     int port_id = 0;
