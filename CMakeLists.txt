@@ -46,19 +46,24 @@ set(products_folder ${CMAKE_BINARY_DIR})
         COMMAND ${CMAKE_COMMAND} -E copy "${products_folder}/NoisePlethoraSynth.clap" "C:\\Program Files\\Common Files\\CLAP"
     )
 
+
+
 add_library(noiseplethora
     source/noise-plethora/random.cpp
-    source/noise-plethora/teensy/effect_freeverb.cpp
-    source/noise-plethora/teensy/effect_bitcrusher.cpp
-    source/noise-plethora/teensy/effect_granular.cpp
-    source/noise-plethora/teensy/effect_combine.cpp
-    source/noise-plethora/teensy/effect_multiply.cpp
-    source/noise-plethora/teensy/effect_flange.cpp
-    source/noise-plethora/teensy/effect_wavefolder.cpp
-    source/noise-plethora/teensy/filter_variable.cpp
-    source/noise-plethora/teensy/synth_pwm.cpp
-    source/noise-plethora/teensy/synth_pinknoise.cpp
-    source/noise-plethora/teensy/synth_whitenoise.cpp
+    # source/noise-plethora/teensy/effect_freeverb.cpp
+    # source/noise-plethora/teensy/effect_bitcrusher.cpp
+    # source/noise-plethora/teensy/effect_granular.cpp
+    # source/noise-plethora/teensy/effect_combine.cpp
+    # source/noise-plethora/teensy/effect_multiply.cpp
+    # source/noise-plethora/teensy/effect_flange.cpp
+    # source/noise-plethora/teensy/effect_wavefolder.cpp
+    # source/noise-plethora/teensy/filter_variable.cpp
+    # source/noise-plethora/teensy/synth_pwm.cpp
+    # source/noise-plethora/teensy/synth_pinknoise.cpp
+    # source/noise-plethora/teensy/synth_whitenoise.cpp
     source/noise-plethora/plugins/Banks.cpp
+    
 )
+file(GLOB_RECURSE NPSOURCES ${CMAKE_CURRENT_SOURCE_DIR}/source/noise-plethora/teensy/*.cpp)
+target_sources(noiseplethora PRIVATE ${NPSOURCES})
 target_compile_definitions(noiseplethora PRIVATE _USE_MATH_DEFINES=1)

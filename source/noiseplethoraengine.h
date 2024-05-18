@@ -159,8 +159,8 @@ class NoisePlethoraVoice
         }
         for (auto &p : m_plugs)
         {
-            p->init();
             p->m_sr = m_sr;
+            p->init();
         }
         m_cur_plugin = m_plugs[0].get();
     }

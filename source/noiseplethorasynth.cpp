@@ -137,6 +137,7 @@ struct xen_noise_plethora
                                 clap::helpers::CheckingLevel::Maximal>(desc, host)
 
     {
+        host->request_callback(host);
         m_from_ui_fifo.reset(1024);
         m_to_ui_fifo.reset(1024);
         paramDescriptions.push_back(ParamDesc()
@@ -281,7 +282,10 @@ struct xen_noise_plethora
         paramValues[10] = m_synth.m_voices[0]->eg_sustain;
         paramValues[11] = m_synth.m_voices[0]->eg_release;
         paramValues[12] = m_synth.m_voices[0]->keytrackMode;
+        auto host_par_ext = (clap_host_params *)host->get_extension(host, CLAP_EXT_PARAMS);
+        host_par_ext->rescan(host, CLAP_PARAM_RESCAN_ALL);
     }
+    void onMainThread() noexcept override { std::cout << "plug : on main thread\n"; }
     bool activate(double sampleRate_, uint32_t minFrameCount,
                   uint32_t maxFrameCount) noexcept override
     {
