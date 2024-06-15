@@ -14,7 +14,7 @@
     
     .xycontrolsstyle {
       display: flex;
-      padding: 10px;
+      padding: 5px;
       justify-content: space-between;
       background-color: DodgerBlue;
       font-family: 'Courier New', monospace;
@@ -187,10 +187,13 @@
         //let br = document.createElement("br");
         //document.getElementById(divid).appendChild(br);
         sliders[slid_id] = slid1;
-        
-        let vallab = document.createTextNode("foo");
+        let vallab = document.createTextNode("Not inited");
         document.getElementById(divid).appendChild(vallab);
         valuelabels[slid_id] = vallab;
+        getParameterText({id:slid_id,value:defaultval}).then ((result) => 
+        {
+            valuelabels[slid_id].textContent = result;
+        });
         let br1 = document.createElement("br");
         document.getElementById(divid).appendChild(br1);
         //let finaldiv = document.createElement("div");
@@ -200,7 +203,7 @@
     // result from c++ is an async promise! so we need to deal with that like this...
     getParameters([]).then ((result) => 
     { 
-      xy0 = new XYControl("A",1,"X",0.0,1.0,2,"Y",0.0,1.0,0.5,0.5,"group_xy");
+      xy0 = new XYControl("A",1,"X",0.0,1.0,2,"Y",0.0,1.0,result["1"].defaultval,result["2"].defaultval,"group_xy");
       createSlider(6,"Algorithm",0,29,0,1,"group_xy");
       createSlider(12,"Key tracking mode",0,5,0,1,"group_xy");
       xycontrols.push(xy0);
@@ -208,7 +211,7 @@
       createSlider(5,"Filter type",0,5,0,1,"group_filter");
       xycontrols.push(xy1);
       xy2 = new XYControl("C",7,"Pan",-1.0,1.0,0,"Volume",-48.0,9,0.0,0.01,"group_volpan");
-      createSlider(8,"Attack",0.0,1.0,0.1,null,"group_volpan");
+      createSlider(8,"Attack",0.0,1.0,result["8"].defaultval,null,"group_volpan");
       createSlider(9,"Decay",0.0,1.0,0.1,null,"group_volpan");
       createSlider(10,"Sustain",0.0,1.0,0.75,null,"group_volpan");
       createSlider(11,"Release",0.0,1.0,0.1,null,"group_volpan");

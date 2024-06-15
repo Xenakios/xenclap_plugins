@@ -14,6 +14,7 @@ using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 struct UiMessage
 {
     UiMessage() {}
+    UiMessage(int type_, clap_id parid_, float val) : type(type_), parid(parid_), values{val} {}
     int type = 0;
     clap_id parid = CLAP_INVALID_ID;
     float values[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -43,6 +44,10 @@ class NoisePlethoraGUI
                         [this](const choc::value::ValueView &args) -> choc::value::Value {
                             auto parid = args[0]["id"].get<int>();
                             auto value = args[0]["value"].get<double>();
+                            auto pd = m_idToParamdesc[parid];
+                            auto str = pd->valueToString(value);
+                            if (str)
+                                return choc::value::Value(*str);
                             return choc::value::Value{};
                         });
         m_webview->bind("getParameterUpdates",
@@ -80,11 +85,8 @@ class NoisePlethoraGUI
                             // can throw exceptions, so we should maybe have a try catch block
                             // here...but we should just know this will work, really.
                             auto parid = args[0]["id"].get<int>();
-                            auto value = args[0]["value"].get<double>();
-                            UiMessage msg;
-                            msg.type = CLAP_EVENT_PARAM_VALUE;
-                            msg.values[0] = value;
-                            msg.parid = parid;
+                            auto value = args[0]["value"].get<float>();
+                            UiMessage msg{CLAP_EVENT_PARAM_VALUE, (clap_id)parid, value};
                             m_to_proc_fifo.push(msg);
                             auto pd = m_idToParamdesc[msg.parid];
                             auto str = pd->valueToString(msg.values[0]);
@@ -95,7 +97,7 @@ class NoisePlethoraGUI
         m_webview->bind(
             "getParameters",
             [this, pargetfunc](const choc::value::ValueView &args) -> choc::value::Value {
-                auto result = choc::value::createEmptyArray();
+                auto result = choc::value::createObject("paraminfos");
                 for (int i = 0; i < m_paramDescs.size(); ++i)
                 {
                     auto info = choc::value::createObject("paraminfo");
@@ -109,7 +111,7 @@ class NoisePlethoraGUI
                         info.setMember("step", 1.0);
                     else
                         info.setMember("step", 0.01);
-                    result.addArrayElement(info);
+                    result.setMember(std::to_string(m_paramDescs[i].id), info);
                 }
                 return result;
             });
@@ -642,7 +644,7 @@ struct xen_noise_plethora
         return true;
     }
     int guiw = 700;
-    int guih = 830;
+    int guih = 580;
     bool guiGetSize(uint32_t *width, uint32_t *height) noexcept override
     {
         if (!m_gui)
