@@ -207,14 +207,14 @@
       createSlider(6,"Algorithm",0,29,0,1,"group_xy");
       createSlider(12,"Key tracking mode",0,5,0,1,"group_xy");
       xycontrols.push(xy0);
-      xy1 = new XYControl("B",3,"Cutoff",24.0,127.0,4,"Resonance",0.01,.99,120.0,0.01,"group_filter");
+      xy1 = new XYControl("B",3,"Cutoff",24.0,127.0,4,"Resonance",0.01,0.99,120.0,0.01,"group_filter");
       createSlider(5,"Filter type",0,5,0,1,"group_filter");
       xycontrols.push(xy1);
       xy2 = new XYControl("C",7,"Pan",-1.0,1.0,0,"Volume",-48.0,9,0.0,0.01,"group_volpan");
       createSlider(8,"Attack",0.0,1.0,result["8"].defaultval,null,"group_volpan");
-      createSlider(9,"Decay",0.0,1.0,0.1,null,"group_volpan");
-      createSlider(10,"Sustain",0.0,1.0,0.75,null,"group_volpan");
-      createSlider(11,"Release",0.0,1.0,0.1,null,"group_volpan");
+      createSlider(9,"Decay",0.0,1.0,result["9"].defaultval,null,"group_volpan");
+      createSlider(10,"Sustain",0.0,1.0,result["10"].defaultval,null,"group_volpan");
+      createSlider(11,"Release",0.0,1.0,result["11"].defaultval,null,"group_volpan");
       xycontrols.push(xy2);      
       
     });
