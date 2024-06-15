@@ -14,7 +14,7 @@ using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 struct UiMessage
 {
     UiMessage() {}
-    UiMessage(int type_, clap_id parid_, float val) : type(type_), parid(parid_), values{val} {}
+    UiMessage(int type_, clap_id parid_, float val) : type{type_}, parid{parid_}, values{val} {}
     int type = 0;
     clap_id parid = CLAP_INVALID_ID;
     float values[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};

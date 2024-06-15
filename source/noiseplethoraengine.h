@@ -206,11 +206,8 @@ class NoisePlethoraVoice
         }
         else if (keytrackMode >= 3 && keytrackMode <= 5)
         {
-            int gsize = 3;
-            if (keytrackMode == 4)
-                gsize = 5;
-            if (keytrackMode == 5)
-                gsize = 7;
+            const int gsizes[3] = {3, 5, 7};
+            int gsize = gsizes[keytrackMode - 3];
             int numcells = gsize * gsize;
             int modkey = key % numcells;
             int ix = modkey % gsize;
