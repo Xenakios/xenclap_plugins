@@ -154,13 +154,8 @@ class NoisePlethoraVoice
         }
 
         m_gain_smoother.setSlope(0.999);
-        m_pan_smoother.setSlope(0.999);
-        float g = xenakios::decibelsToGain(basevalues.volume);
-        m_pan_smoother.setValueImmediate(basevalues.pan);
-        for (int i = 0; i < 2048; ++i)
-        {
-            m_gain_smoother.process(g);
-        }
+        m_pan_smoother.setSlope(0.995);
+
         for (auto &p : m_plugs)
         {
             p->m_sr = m_sr;
@@ -172,9 +167,10 @@ class NoisePlethoraVoice
     double velocity = 1.0;
     bool m_eg_gate = false;
     bool m_voice_active = false;
-
+    bool m_voice_was_started = false;
     void activate(int port_, int chan_, int key_, int id_, double velo)
     {
+        m_voice_was_started = true;
         velocity = velo;
         port_id = port_;
         chan = chan_;
@@ -190,6 +186,8 @@ class NoisePlethoraVoice
         keytrack_x_mod = 0.0f;
         keytrack_y_mod = 0.0f;
         visualizationDirty = true;
+        // m_pan_smoother.setValueImmediate(
+        //    xenakios::mapvalue(basevalues.pan, -1.0f, 1.0f, 0.0f, 1.0f));
         // theoretically possible was started with key -1, although no longer endorsed by Clap
         if (key == -1)
             return;
@@ -272,7 +270,12 @@ class NoisePlethoraVoice
         float basepan = xenakios::mapvalue(basevalues.pan, -1.0f, 1.0f, 0.0f, 1.0f);
         float expr_pan = xenakios::mapvalue(note_expr_pan, 0.0f, 1.0f, -0.5f, 0.5f);
         double totalpan = reflect_value(0.0f, basepan + modvalues.pan, 1.0f);
-
+        if (m_voice_was_started)
+        {
+            m_voice_was_started = false;
+            m_pan_smoother.setValueImmediate(totalpan);
+            m_gain_smoother.setValueImmediate(gain);
+        }
         auto chansdata = destBuf.data.channels;
         for (size_t i = 0; i < destBuf.size.numFrames; ++i)
         {
