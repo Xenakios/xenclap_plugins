@@ -148,7 +148,11 @@ class NoisePlethoraVoice
         m_sr = sampleRate;
         dcblocker.setCoeff(hipasscutoff, 0.01, 1.0 / m_sr);
         dcblocker.init();
-        filter.init();
+        for (auto &f : filters)
+        {
+            f.init();
+        }
+
         m_gain_smoother.setSlope(0.999);
         m_pan_smoother.setSlope(0.999);
         float g = xenakios::decibelsToGain(basevalues.volume);
@@ -223,6 +227,7 @@ class NoisePlethoraVoice
     float eg_sustain = 0.75f;
     float eg_release = 0.5f;
     int keytrackMode = 0;
+    int filterCount = 1;
     std::function<void(int, int, int, int)> DeativatedVoiceCallback;
     float totalx = 0.0f;
     float totaly = 0.0f;
@@ -253,15 +258,21 @@ class NoisePlethoraVoice
         float velodb = -18.0 + 18.0 * velocity;
         double totalvol = std::clamp(basevalues.volume + modvalues.volume + velodb, -96.0f, 0.0f);
         double gain = xenakios::decibelsToGain(totalvol);
-        sst::basic_blocks::dsp::pan_laws::panmatrix_t panmat;
+
+        StereoSimperSVF::Mode ftype = (StereoSimperSVF::Mode)(int)basevalues.filttype;
+        filterCount = std::clamp(filterCount, 1, 16);
         double totalcutoff = std::clamp(basevalues.filtcutoff + modvalues.filtcutoff, 0.0f, 127.0f);
         double totalreson = std::clamp(basevalues.filtreson + modvalues.filtreson, 0.01f, 0.99f);
-        filter.setCoeff(totalcutoff, totalreson, 1.0 / m_sr);
+        for (int i = 0; i < filterCount; ++i)
+        {
+            filters[i].setCoeff(totalcutoff, totalreson, 1.0 / m_sr);
+        }
+
+        sst::basic_blocks::dsp::pan_laws::panmatrix_t panmat;
         float basepan = xenakios::mapvalue(basevalues.pan, -1.0f, 1.0f, 0.0f, 1.0f);
         float expr_pan = xenakios::mapvalue(note_expr_pan, 0.0f, 1.0f, -0.5f, 0.5f);
         double totalpan = reflect_value(0.0f, basepan + modvalues.pan, 1.0f);
 
-        StereoSimperSVF::Mode ftype = (StereoSimperSVF::Mode)(int)basevalues.filttype;
         auto chansdata = destBuf.data.channels;
         for (size_t i = 0; i < destBuf.size.numFrames; ++i)
         {
@@ -283,36 +294,43 @@ class NoisePlethoraVoice
             float out = plug->processGraph();
             float dummy = 0.0f;
             dcblocker.step<StereoSimperSVF::HP>(dcblocker, out, dummy);
+
             switch (ftype)
             {
             case StereoSimperSVF::LP:
             {
-                filter.step<StereoSimperSVF::LP>(filter, out, dummy);
+                filters[0].step<StereoSimperSVF::LP>(filters[0], out, dummy);
                 break;
             }
             case StereoSimperSVF::HP:
             {
-                filter.step<StereoSimperSVF::HP>(filter, out, dummy);
+                filters[0].step<StereoSimperSVF::HP>(filters[0], out, dummy);
                 break;
             }
             case StereoSimperSVF::BP:
             {
-                filter.step<StereoSimperSVF::BP>(filter, out, dummy);
+                filters[0].step<StereoSimperSVF::BP>(filters[0], out, dummy);
                 break;
             }
             case StereoSimperSVF::PEAK:
             {
-                filter.step<StereoSimperSVF::PEAK>(filter, out, dummy);
+                filters[0].step<StereoSimperSVF::PEAK>(filters[0], out, dummy);
                 break;
             }
             case StereoSimperSVF::NOTCH:
             {
-                filter.step<StereoSimperSVF::NOTCH>(filter, out, dummy);
+                filters[0].step<StereoSimperSVF::NOTCH>(filters[0], out, dummy);
                 break;
             }
             case StereoSimperSVF::ALL:
             {
-                filter.step<StereoSimperSVF::ALL>(filter, out, dummy);
+                float cachedOut = out;
+                for (int i = 0; i < filterCount; ++i)
+                {
+                    filters[i].step<StereoSimperSVF::ALL>(filters[i], out, dummy);
+                }
+
+                out = 0.5f * out + 0.5f * cachedOut;
                 break;
             }
             default:
@@ -343,7 +361,8 @@ class NoisePlethoraVoice
     SignalSmoother m_pan_smoother;
     double m_sr = 0.0;
     StereoSimperSVF dcblocker;
-    StereoSimperSVF filter;
+
+    std::array<StereoSimperSVF, 16> filters;
 };
 
 class NoisePlethoraSynth
@@ -451,6 +470,8 @@ class NoisePlethoraSynth
                     v->eg_release = value;
                 if (parid == (clap_id)ParamIDs::KeyTrackMode)
                     v->keytrackMode = value;
+                if (parid == (clap_id)ParamIDs::FilterCount)
+                    v->filterCount = value;
             }
         }
     }
@@ -515,7 +536,8 @@ class NoisePlethoraSynth
         EGDecay,
         EGSustain,
         EGRelease,
-        KeyTrackMode
+        KeyTrackMode,
+        FilterCount
     };
     int m_polyphony = 1;
     double m_pan_spread = 0.0;

@@ -271,6 +271,15 @@ struct xen_noise_plethora
                            CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_PARAM_IS_STEPPED)
                 .withName("Key tracking mode")
                 .withID((clap_id)NoisePlethoraSynth::ParamIDs::KeyTrackMode));
+        paramDescriptions.push_back(
+            ParamDesc()
+                .asInt()
+                .withRange(1.0, 16.0)
+                .withDefault(0.1f)
+                .withLinearScaleFormatting("")
+                .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED)
+                .withName("Filter count")
+                .withID((clap_id)NoisePlethoraSynth::ParamIDs::FilterCount));
         paramValues[0] = m_synth.m_voices[0]->basevalues.volume;
         paramValues[1] = m_synth.m_voices[0]->basevalues.x;
         paramValues[2] = m_synth.m_voices[0]->basevalues.y;
@@ -284,6 +293,7 @@ struct xen_noise_plethora
         paramValues[10] = m_synth.m_voices[0]->eg_sustain;
         paramValues[11] = m_synth.m_voices[0]->eg_release;
         paramValues[12] = m_synth.m_voices[0]->keytrackMode;
+        paramValues[13] = m_synth.m_voices[0]->filterCount;
         auto host_par_ext = (clap_host_params *)host->get_extension(host, CLAP_EXT_PARAMS);
         host_par_ext->rescan(host, CLAP_PARAM_RESCAN_ALL);
     }
@@ -312,7 +322,7 @@ struct xen_noise_plethora
         paramDescriptions[paramIndex].toClapParamInfo<CLAP_NAME_SIZE>(info);
         return true;
     }
-    static constexpr size_t numParams = 13;
+    static constexpr size_t numParams = 14;
     std::array<float, numParams> paramValues;
     bool paramsValue(clap_id paramId, double *value) noexcept override
     {
