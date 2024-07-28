@@ -343,7 +343,7 @@ struct xen_noise_plethora
                 auto s = e.valueToString(value);
                 if (s)
                 {
-                    strcpy(display, s->c_str());
+                    strcpy_s(display, size, s->c_str());
                     return true;
                 }
             }
@@ -363,7 +363,7 @@ struct xen_noise_plethora
         if (isInput)
         {
             info->id = 5012;
-            strcpy(info->name, "Note input");
+            strcpy_s(info->name, "Note input");
             info->preferred_dialect = CLAP_NOTE_DIALECT_CLAP;
             info->supported_dialects = CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI;
         }
@@ -381,7 +381,7 @@ struct xen_noise_plethora
     {
         // port id can be a "random" number
         info->id = isInput ? 2112 : 90210;
-        strncpy(info->name, "main", sizeof(info->name));
+        strcpy_s(info->name, "main");
         info->flags = CLAP_AUDIO_PORT_IS_MAIN;
         info->channel_count = 2;
         info->port_type = CLAP_PORT_STEREO;
