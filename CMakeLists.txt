@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 include_directories(
     libs/clap/include
     libs/clap-helpers/include
-    source/noise-plethora/rack/include
+    source/noiseplethora/noise-plethora/rack/include
     libs/signalsmith-stretch
     libs/choc
     libs/sst-basic-blocks/include
@@ -26,7 +26,7 @@ add_subdirectory(libs/clap-wrapper)
 # target_compile_definitions(noise_plethora_vst3 PRIVATE _USE_MATH_DEFINES=1)
 
 add_library(FilePlayerPlugin MODULE
-source/fileplayer.cpp
+source/fileplayer/fileplayer.cpp
 )
 
 set_target_properties(FilePlayerPlugin PROPERTIES SUFFIX ".clap" PREFIX "")
@@ -40,7 +40,7 @@ set(products_folder ${CMAKE_BINARY_DIR})
     )
 
 add_library(NoisePlethoraSynth MODULE
-source/noiseplethorasynth.cpp
+source/noiseplethora/noiseplethorasynth.cpp
 )
 
 set_target_properties(NoisePlethoraSynth PROPERTIES SUFFIX ".clap" PREFIX "")
@@ -56,7 +56,7 @@ set(products_folder ${CMAKE_BINARY_DIR})
 
 
 add_library(noiseplethora
-    source/noise-plethora/random.cpp
+    source/noiseplethora/noise-plethora/random.cpp
     # source/noise-plethora/teensy/effect_freeverb.cpp
     # source/noise-plethora/teensy/effect_bitcrusher.cpp
     # source/noise-plethora/teensy/effect_granular.cpp
@@ -68,9 +68,9 @@ add_library(noiseplethora
     # source/noise-plethora/teensy/synth_pwm.cpp
     # source/noise-plethora/teensy/synth_pinknoise.cpp
     # source/noise-plethora/teensy/synth_whitenoise.cpp
-    source/noise-plethora/plugins/Banks.cpp
+    source/noiseplethora/noise-plethora/plugins/Banks.cpp
     
 )
-file(GLOB_RECURSE NPSOURCES ${CMAKE_CURRENT_SOURCE_DIR}/source/noise-plethora/teensy/*.cpp)
+file(GLOB_RECURSE NPSOURCES ${CMAKE_CURRENT_SOURCE_DIR}/source/noiseplethora/noise-plethora/teensy/*.cpp)
 target_sources(noiseplethora PRIVATE ${NPSOURCES})
 target_compile_definitions(noiseplethora PRIVATE _USE_MATH_DEFINES=1)

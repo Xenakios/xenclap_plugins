@@ -9,8 +9,8 @@
 #include "gui/choc_MessageLoop.h"
 #include "gui/choc_WebView.h"
 #include "text/choc_Files.h"
-#include "xap_utils.h"
-#include "xapdsp.h"
+#include "../xap_utils.h"
+#include "../xapdsp.h"
 #include "sst/voicemanager/voicemanager.h"
 
 class SignalSmoother
