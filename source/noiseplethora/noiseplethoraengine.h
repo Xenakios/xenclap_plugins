@@ -5,6 +5,7 @@
 #include "audio/choc_AudioFileFormat_WAV.h"
 #include "sst/basic-blocks/dsp/PanLaws.h"
 #include "sst/basic-blocks/modulators/ADSREnvelope.h"
+#include "sst/basic-blocks/dsp/FollowSlewAndSmooth.h"
 #include "gui/choc_DesktopWindow.h"
 #include "gui/choc_MessageLoop.h"
 #include "gui/choc_WebView.h"
@@ -33,22 +34,6 @@ class SignalSmoother
 };
 
 constexpr size_t ENVBLOCKSIZE = 64;
-
-inline void list_plugins()
-{
-    int k = 0;
-    for (int i = 0; i < numBanks; ++i)
-    {
-        auto &bank = getBankForIndex(i);
-        std::cout << "bank " << i << "\n";
-        for (int j = 0; j < programsPerBank; ++j)
-        {
-            std::cout << "\t" << bank.getProgramName(j) << "\t\t" << k << "\n";
-            // availablePlugins[k] = bank.getProgramName(j);
-            ++k;
-        }
-    }
-}
 
 struct SRProviderB
 {
@@ -153,9 +138,8 @@ class NoisePlethoraVoice
             f.init();
         }
 
-        m_gain_smoother.setSlope(0.999);
-        m_pan_smoother.setSlope(0.995);
-
+        m_gain_slew.setParams(10.0f, 1.0f, sampleRate);
+        m_pan_slew.setParams(20.0f, 1.0f, sampleRate);
         for (auto &p : m_plugs)
         {
             p->m_sr = m_sr;
@@ -186,8 +170,7 @@ class NoisePlethoraVoice
         keytrack_x_mod = 0.0f;
         keytrack_y_mod = 0.0f;
         visualizationDirty = true;
-        // m_pan_smoother.setValueImmediate(
-        //    xenakios::mapvalue(basevalues.pan, -1.0f, 1.0f, 0.0f, 1.0f));
+
         // theoretically possible was started with key -1, although no longer endorsed by Clap
         if (key == -1)
             return;
@@ -254,8 +237,8 @@ class NoisePlethoraVoice
         }
         plug->process(totalx, totaly);
         float velodb = -18.0 + 18.0 * velocity;
-        double totalvol = std::clamp(basevalues.volume + modvalues.volume + velodb, -96.0f, 0.0f);
-        double gain = xenakios::decibelsToGain(totalvol);
+        float totalvol = std::clamp(basevalues.volume + modvalues.volume + velodb, -96.0f, 0.0f);
+        float gain = xenakios::decibelsToGain(totalvol);
 
         StereoSimperSVF::Mode ftype = (StereoSimperSVF::Mode)(int)basevalues.filttype;
         filterCount = std::clamp(filterCount, 1, 16);
@@ -269,12 +252,12 @@ class NoisePlethoraVoice
         sst::basic_blocks::dsp::pan_laws::panmatrix_t panmat;
         float basepan = xenakios::mapvalue(basevalues.pan, -1.0f, 1.0f, 0.0f, 1.0f);
         float expr_pan = xenakios::mapvalue(note_expr_pan, 0.0f, 1.0f, -0.5f, 0.5f);
-        double totalpan = reflect_value(0.0f, basepan + modvalues.pan, 1.0f);
+        float totalpan = reflect_value(0.0f, basepan + modvalues.pan, 1.0f);
         if (m_voice_was_started)
         {
             m_voice_was_started = false;
-            m_pan_smoother.setValueImmediate(totalpan);
-            m_gain_smoother.setValueImmediate(gain);
+            m_gain_slew.setLast(gain);
+            m_pan_slew.setLast(totalpan);
         }
         auto chansdata = destBuf.data.channels;
         for (size_t i = 0; i < destBuf.size.numFrames; ++i)
@@ -288,8 +271,8 @@ class NoisePlethoraVoice
             ++m_update_counter;
             if (m_update_counter == ENVBLOCKSIZE)
                 m_update_counter = 0;
-            double smoothedgain = m_gain_smoother.process(gain);
-            double smoothedpan = m_pan_smoother.process(totalpan);
+            auto smoothedgain = m_gain_slew.step(gain);
+            auto smoothedpan = m_pan_slew.step(totalpan);
             // does expensive calculation, so might want to use tables or something instead
             sst::basic_blocks::dsp::pan_laws::monoEqualPower(smoothedpan, panmat);
             float finalgain = smoothedgain * envgain;
@@ -360,8 +343,8 @@ class NoisePlethoraVoice
   private:
     // the noise plethora code calls the algos "plugins", which is a bit confusing
     std::vector<std::unique_ptr<NoisePlethoraPlugin>> m_plugs;
-    SignalSmoother m_gain_smoother;
-    SignalSmoother m_pan_smoother;
+    sst::basic_blocks::dsp::SlewLimiter m_gain_slew;
+    sst::basic_blocks::dsp::SlewLimiter m_pan_slew;
     double m_sr = 0.0;
     StereoSimperSVF dcblocker;
 
