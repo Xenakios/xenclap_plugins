@@ -370,7 +370,13 @@ class NoisePlethoraSynth
             m_voices.push_back(std::move(v));
         }
     }
-    ~NoisePlethoraSynth() { std::cout << "voices left at synth dtor " << voicecount << "\n"; }
+    ~NoisePlethoraSynth()
+    {
+        if (voicecount > 0)
+        {
+            std::cout << "voices left at synth dtor " << voicecount << "\n";
+        }
+    }
     void setVoiceEndCallback(std::function<void(voice_t *)>) {}
     void prepare(double sampleRate, int maxBlockSize)
     {
