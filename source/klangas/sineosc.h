@@ -8,7 +8,18 @@
 #include "sst/basic-blocks/modulators/ADSREnvelope.h"
 #include <utility>
 #include <optional>
-// using mkd = juce::MathConstants<double>;
+#include "../xap_utils.h"
+#include "audio/choc_SampleBuffers.h"
+#include <mutex>
+#include "sst/basic-blocks/dsp/FollowSlewAndSmooth.h"
+
+namespace juce
+{
+template <typename T> inline T jlimit(T val, T minval, T maxval)
+{
+    return std::clamp(val, minval, maxval);
+}
+} // namespace juce
 
 struct SRProvider
 {
@@ -185,7 +196,8 @@ class BurstGenerator
     int m_counter = 0;
     double m_probability = 0.5;
     double m_distrib = 0.5;
-    juce::Random m_rng;
+    std::minstd_rand m_rng;
+    std::uniform_real_distribution<float> m_dist{0.0f, 1.0f};
     VoiceEG env;
 };
 
@@ -351,7 +363,7 @@ class AdditiveVoice
     int m_tuning_mode = 0;
     int m_edo = 12;
 
-    alignas(32) juce::SmoothedValue<float> m_pitch_bend_smoother;
+    alignas(32) sst::basic_blocks::dsp::SlewLimiter m_pitch_bend_smoother;
 
     int m_key_shift = 0;
     float m_pan = 0.5f; // center
@@ -368,22 +380,22 @@ class AdditiveSynth
   public:
     AdditiveSynth();
     void prepare(double sampleRate);
-    void processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuffer &midiMessages);
+    void processBlock(choc::buffer::ChannelArrayView<float> destBuf);
     AdditiveSharedData m_shared_data;
 
     alignas(32)
         std::array<AdditiveVoice, 8> m_voices; // {constructFill<AdditiveVoice,8>(&m_shared_data)};
 
-    juce::String importScalaFile(juce::File file);
-    juce::String importKBMFile(juce::File file);
-    juce::String importKBMText(juce::String text);
+    // juce::String importScalaFile(juce::File file);
+    // juce::String importKBMFile(juce::File file);
+    // juce::String importKBMText(juce::String text);
     void setEDOParameters(double pseudoOctaveCents, int edo);
 
     double m_tuning_update_elapsed_ms = 0.0;
     // in key space
     void setPitchBendRange(double range);
     std::atomic<bool> m_has_error{false};
-    juce::String m_error_text;
+    std::string m_error_text;
     double getPseudoOctave() { return m_pseudo_octave; }
     int getEDO() { return m_edo; }
     void setModulationDepth(int source, int target, float amount)
@@ -391,13 +403,13 @@ class AdditiveSynth
         m_shared_data.modmatrix[source][target] = amount;
     }
     std::atomic<int> m_num_active_voices{0};
-
-  private:
     void handleNoteOn(int port_index, int channel, int key, int noteid, double velo);
     void handleNoteOff(int port_index, int channel, int key, int noteid);
     void handleCC(int port_index, int channel, int cc, int value);
     void handlePitchBend(int port_index, int channel, float value);
     void handlePolyAfterTouch(int port_index, int channel, int note, float value);
+
+  private:
     int m_note_counter = 0;
     int m_time_pos_counter = 0;
     int m_kbm_start_note = -1;
@@ -408,6 +420,5 @@ class AdditiveSynth
     bool m_sustain_pedal = false;
     double m_pitch_bend_range = 1.0;
     double m_cur_pitch_bend = 0.0;
-
-    juce::SpinLock m_cs; // not for general use, but used for updating the tuning table
+    std::mutex m_cs;
 };

@@ -55,7 +55,7 @@ juce::String AdditiveSharedData::getTableAsText(const AdditiveSharedData::MorphT
             for (int j = 0; j < parts; ++j)
             {
                 float gain = tab[i][j];
-                gain = juce::jmap(gain, 0.0f, 1.0f, 0.0f, 25.0f);
+                gain = xenakios::mapvalue(gain, 0.0f, 1.0f, 0.0f, 25.0f);
                 char ch = 'A' + std::floor(gain);
                 out << ch;
             }
@@ -109,8 +109,8 @@ float AdditiveSharedData::getSafetyFilterCoefficient(float hz)
     assert(!std::isnan(hz));
     if (hz <= minpartialfrequency || hz >= maxpartialfrequency)
         return 0.0f;
-    int index = (int)juce::jmap<float>(hz, minpartialfrequency, maxpartialfrequency, 0.0f,
-                                       safety_filter.size() - 1);
+    int index = (int)xenakios::mapvalue<float>(hz, minpartialfrequency, maxpartialfrequency, 0.0f,
+                                               safety_filter.size() - 1);
     assert(index >= 0 && index < safety_filter.size());
     // index = juce::jlimit<int>(0,safety_filter.size()-1,index);
     return safety_filter[index];
@@ -125,30 +125,31 @@ AdditiveSharedData::AdditiveSharedData()
     high_cutoff = 15000.0f;
     for (int i = 0; i < safety_filter.size(); ++i)
     {
-        float hz = juce::jmap<float>(i, 0, safety_filter.size() - 1, minpartialfrequency,
-                                     maxpartialfrequency);
+        float hz = xenakios::mapvalue<float>(i, 0, safety_filter.size() - 1, minpartialfrequency,
+                                             maxpartialfrequency);
         float gain = 1.0f;
         if (hz <= low_cutoff)
-            gain = juce::jmap(hz, minpartialfrequency, low_cutoff, 0.0f, 1.0f);
+            gain = xenakios::mapvalue(hz, minpartialfrequency, low_cutoff, 0.0f, 1.0f);
         else if (hz >= high_cutoff)
-            gain = juce::jmap(hz, high_cutoff, maxpartialfrequency, 1.0f, 0.0f);
-        jassert(gain >= 0.0f && gain <= 1.0f);
+            gain = xenakios::mapvalue(hz, high_cutoff, maxpartialfrequency, 1.0f, 0.0f);
+        assert(gain >= 0.0f && gain <= 1.0f);
         safety_filter[i] = gain;
     }
-    juce::Random rng(99217);
+
+    std::minstd_rand0 rng(99217);
+    std::uniform_real_distribution<float> dist{0.0f, 1.0f};
     for (int i = 0; i < voice_random_filter_gains.size(); ++i)
     {
-        float db = -30.0 + 30.0 * rng.nextFloat();
-        voice_random_filter_gains[i] = juce::Decibels::decibelsToGain(db);
+        float db = -30.0 + 30.0 * dist(rng);
+        voice_random_filter_gains[i] = xenakios::decibelsToGain(db);
     }
     int pan_coeffs_size = pan_coefficients[0].size();
     for (int i = 0; i < pan_coeffs_size; ++i)
     {
-        float normalisedPan = juce::jmap<float>(i, 0, pan_coeffs_size - 1, 0.0f, 1.0f);
-        float leftValue = static_cast<float>(
-            std::pow(std::sin(0.5 * juce::MathConstants<double>::pi * (1.0 - normalisedPan)), 2.0));
-        float rightValue = static_cast<float>(
-            std::pow(std::sin(0.5 * juce::MathConstants<double>::pi * normalisedPan), 2.0));
+        float normalisedPan = xenakios::mapvalue<float>(i, 0, pan_coeffs_size - 1, 0.0f, 1.0f);
+        float leftValue =
+            static_cast<float>(std::pow(std::sin(0.5 * M_PI * (1.0 - normalisedPan)), 2.0));
+        float rightValue = static_cast<float>(std::pow(std::sin(0.5 * M_PI * normalisedPan), 2.0));
         float boostValue = static_cast<float>(2.0);
         pan_coefficients[0][i] = leftValue * boostValue;
         pan_coefficients[1][i] = rightValue * boostValue;
@@ -200,30 +201,31 @@ AdditiveSharedData::AdditiveSharedData()
 
 void AdditiveSharedData::generatePanMorphTablePresets()
 {
-    juce::Random rng(763);
+    std::minstd_rand0 rng{763};
+    std::uniform_real_distribution<float> dist{0.0f, 1.0f};
     for (int i = 0; i < maxpanframes; ++i)
     {
         for (int j = 0; j < 64; ++j)
         {
             float panpos = 0.5f;
 
-            panpos = 0.05 + rng.nextFloat() * 0.9;
+            panpos = 0.05 + dist(rng) * 0.9;
             if (j == 0 || i == 0)
                 panpos = 0.5f;
             pan_morph_presets[0][i][j] = panpos;
 
-            float phaseoffset = mkd::twoPi / maxpanframes * i;
+            float phaseoffset = M_PI * 2 / maxpanframes * i;
             float rate = 2.0;
-            panpos = 0.5 + 0.475 * std::sin(mkd::twoPi / 64 * rate * j + phaseoffset);
+            panpos = 0.5 + 0.475 * std::sin(M_PI * 2 / 64 * rate * j + phaseoffset);
             pan_morph_presets[1][i][j] = panpos;
 
             phaseoffset = 0.0f;
             rate = std::pow(2.0, i * 0.25);
-            panpos = 0.5 + 0.475 * std::sin(mkd::twoPi / 64 * rate * j + phaseoffset);
+            panpos = 0.5 + 0.475 * std::sin(M_PI * 2 / 64 * rate * j + phaseoffset);
             pan_morph_presets[2][i][j] = panpos;
 
-            float amp = juce::jmap<float>(i, 0, maxpanframes - 1, 0.0, 0.5);
-            panpos = 0.5 + amp * std::sin(mkd::twoPi / 64 * 8 * j + 0);
+            float amp = xenakios::mapvalue<float>(i, 0, maxpanframes - 1, 0.0, 0.5);
+            panpos = 0.5 + amp * std::sin(M_PI * 2 / 64 * 8 * j + 0);
             pan_morph_presets[3][i][j] = panpos;
         }
     }
@@ -239,7 +241,7 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
 
     for (int i = 0; i < 16; ++i)
     {
-        int maxpart = juce::jmap<float>(i, 0, 15, 2, 63);
+        int maxpart = xenakios::mapvalue<float>(i, 0, 15, 2, 63);
         for (int j = 0; j < 64; ++j)
         {
             if (j >= maxpart)
@@ -247,7 +249,7 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
             else
             {
                 volumepresets[0][i][j] =
-                    juce::jmap<float>(j, 0, maxpart, 1.0f, juce::Decibels::decibelsToGain(-48.0));
+                    xenakios::mapvalue<float>(j, 0, maxpart, 1.0f, xenakios::decibelsToGain(-48.0));
             }
         }
     }
@@ -255,8 +257,8 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
     for (int i = 0; i < 16; ++i)
     {
         int offs = i % 2;
-        float minattendb = juce::jmap<float>(i, 0, 15, -60.0, 0.0);
-        float minatten = juce::Decibels::decibelsToGain(minattendb);
+        float minattendb = xenakios::mapvalue<float>(i, 0, 15, -60.0, 0.0);
+        float minatten = xenakios::decibelsToGain(minattendb);
         for (int j = 0; j < 64; ++j)
         {
             float basegain = 0.0f;
@@ -264,8 +266,8 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
                 basegain = 1.0f;
             if (j == 0)
                 basegain = 1.0f;
-            float attendb = juce::jmap<float>(j, 0, 63, 0.0, minattendb);
-            float atten = juce::Decibels::decibelsToGain(attendb);
+            float attendb = xenakios::mapvalue<float>(j, 0, 63, 0.0, minattendb);
+            float atten = xenakios::decibelsToGain(attendb);
             volumepresets[8][i][j] = basegain * atten;
         }
     }
@@ -274,10 +276,10 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
     {
         for (int j = 0; j < 64; ++j)
         {
-            float amp = -15.0 + 15.0 * std::cos(mkd::twoPi / 16 * i * 1.0f + (mkd::twoPi / 64 * j));
-            float offs = juce::jmap<float>(j, 0, 63, 0.0, -9.0);
+            float amp = -15.0 + 15.0 * std::cos(M_PI * 2 / 16 * i * 1.0f + (M_PI * 2 / 64 * j));
+            float offs = xenakios::mapvalue<float>(j, 0, 63, 0.0, -9.0);
             amp += offs;
-            amp = juce::Decibels::decibelsToGain(amp);
+            amp = xenakios::decibelsToGain(amp);
             volumepresets[1][i][j] = amp;
         }
     }
@@ -286,8 +288,8 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
     {
         for (int j = 0; j < 64; ++j)
         {
-            float amp = -15.0 + 15.0 * std::cos(mkd::twoPi / 64 * j * 4.0f + i);
-            amp = juce::Decibels::decibelsToGain(amp);
+            float amp = -15.0 + 15.0 * std::cos(M_PI * 2 / 64 * j * 4.0f + i);
+            amp = xenakios::decibelsToGain(amp);
             volumepresets[2][i][j] = amp;
         }
     }
@@ -297,11 +299,11 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
             volumepresets[3][i][j] = 0.0f;
     for (int i = 0; i < 256; ++i)
     {
-        float xcor = 32.0 + 32.0 * std::sin(mkd::twoPi / 256 * i * 2.63);
-        xcor = juce::jlimit(0.0f, 63.0f, xcor);
-        float ycor = 7.5 + 8.0 * std::sin(mkd::twoPi / 256 * i * 3.5);
-        ycor = juce::jlimit(0.0f, 15.0f, ycor);
-        float gain = juce::jmap<float>(xcor, 0, 63, 1.0, 0.25);
+        float xcor = 32.0 + 32.0 * std::sin(M_PI * 2 / 256 * i * 2.63);
+        xcor = std::clamp(xcor, 0.0f, 63.0f);
+        float ycor = 7.5 + 8.0 * std::sin(M_PI * 2 / 256 * i * 3.5);
+        ycor = std::clamp(ycor, 0.0f, 15.0f);
+        float gain = xenakios::mapvalue<float>(xcor, 0, 63, 1.0, 0.25);
         volumepresets[3][(int)ycor][(int)xcor] = gain;
     }
 
@@ -319,22 +321,22 @@ void AdditiveSharedData::generateAmplitudeMorphTablePresets()
                     dbval = gauss(rng);
                 if (index == 2)
                 {
-                    float prob = juce::jmap<float>(i, 0, maxampframes - 1, 0.1, 0.95);
+                    float prob = xenakios::mapvalue<float>(i, 0, maxampframes - 1, 0.1, 0.95);
                     if (uni2(rng) < prob)
                         dbval = 0.0f;
                     else
                         dbval = -40.f;
                 }
 
-                dbval = juce::jlimit(-60.0f, 0.0f, dbval);
-                volumepresets[index + 4][i][j] = juce::Decibels::decibelsToGain(dbval);
+                dbval = std::clamp(dbval, -60.0f, 0.0f);
+                volumepresets[index + 4][i][j] = xenakios::decibelsToGain(dbval);
             }
         }
     }
 
     for (int i = 0; i < 16; ++i)
     {
-        double slope = juce::jmap<double>(i, 0, 15, 0.01, 1.0);
+        double slope = xenakios::mapvalue<double>(i, 0, 15, 0.01, 1.0);
         for (int j = 0; j < 64; ++j)
         {
             double gain = std::pow(j + 1, -slope);
@@ -394,8 +396,8 @@ float AdditiveVoice::getShapingFilterGain(float hz)
     }
     else if (m_filter_mode == 2)
     {
-        float offset = mkd::twoPi * m_filter_morph_mod;
-        float g = 0.5f + 0.5f * std::sin(mkd::twoPi / 11 * octave * 8 + offset);
+        float offset = M_PI * 2 * m_filter_morph_mod;
+        float g = 0.5f + 0.5f * std::sin(M_PI * 2 / 11 * octave * 8 + offset);
         g = juce::jlimit(0.0f, 1.0f, g);
         return g;
     }
@@ -426,7 +428,7 @@ float AdditiveVoice::getShapingFilterGain(float hz)
         else
             gain0 = 1.0f;
         float periods = 8.0; // 4.0+4.0*m_filter_morph_mod;
-        float offset = mkd::twoPi * m_filter_morph_mod;
+        float offset = M_PI * 2 * m_filter_morph_mod;
         float gain1 = 0.5f + 0.5f * std::sin(octave * periods + offset);
         return gain0 + (gain1 - gain0) * m_filter_morph_mod;
     }
@@ -529,15 +531,15 @@ AdditiveVoice::AdditiveVoice()
 void AdditiveVoice::postProcessUpdate(int nframes)
 {
     // we only take 1 sample from the smoother in updateState, so we need to advance the smoother
-    m_pitch_bend_smoother.skip(nframes - 1);
+    // m_pitch_bend_smoother.skip(nframes - 1);
 }
 #pragma float_control(precise, off, push)
 void AdditiveVoice::updateState()
 {
     // m_frequencies_ready_to_show = true;
     float pseudoOctaveRatio = std::pow(2.0, (m_pseudo_octave / 1200.0));
-    m_pitch_bend_smoother.setTargetValue(m_pitch_bend_amount);
-    double pb = m_pitch_bend_smoother.getNextValue();
+    // m_pitch_bend_smoother.setTargetValue(m_pitch_bend_amount);
+    double pb = m_pitch_bend_amount;
     double pitch = m_cur_midi_note + pb + m_pitch_lfo_mod + m_pitch_adjust_amount;
     double mappedpitch = pitch;
     if (m_shared_data->m_quantize_pitch_mod_mode == 1)
@@ -564,7 +566,7 @@ void AdditiveVoice::updateState()
         int iter = 1;
         int numpartials = 1;
         m_partial_freqs[0] = m_fundamental_freq;
-        m_partial_phaseincs[0] = mkd::twoPi / m_sr * m_fundamental_freq;
+        m_partial_phaseincs[0] = M_PI * 2 / m_sr * m_fundamental_freq;
         // m_partial_amplitudes[0] = calculatePartialAmplitude(0);
         while (numpartials < m_num_partials)
         {
@@ -580,7 +582,7 @@ void AdditiveVoice::updateState()
             ++iter;
             if (iter == 1000)
                 break;
-            jassert(iter < 1000);
+            assert(iter < 1000);
         }
 #else
         double last_freq = 0.0;
@@ -618,27 +620,28 @@ void AdditiveVoice::updateState()
     for (int i = 0; i < m_num_partials; ++i)
     {
         float targetratio = m_partial_freq_tweak_ratios[m_freq_tweaks_mode][i];
-        float tweakratio = juce::jmap<float>(m_freq_tweaks_mix_mod, 0.0f, 1.0f, 1.0f, targetratio);
+        float tweakratio =
+            xenakios::mapvalue<float>(m_freq_tweaks_mix_mod, 0.0f, 1.0f, 1.0f, targetratio);
         float pf = m_partial_freqs[i] * tweakratio;
         pf = juce::jlimit(AdditiveSharedData::minpartialfrequency,
                           AdditiveSharedData::maxpartialfrequency, pf);
-        jassert(!std::isnan(pf));
-        float phaseinc = mkd::twoPi / m_sr * pf;
-        if (phaseinc >= mkd::twoPi) // quick hack
-            phaseinc = std::fmod(phaseinc, mkd::twoPi);
+        assert(!std::isnan(pf));
+        float phaseinc = M_PI * 2 / m_sr * pf;
+        if (phaseinc >= M_PI * 2) // quick hack
+            phaseinc = std::fmod(phaseinc, M_PI * 2);
         m_partial_freqs[i] = pf;
         m_partial_phaseincs[i] = phaseinc;
         m_partial_freqs_vis[i] = pf;
         float sfgain = m_shared_data->getSafetyFilterCoefficient(pf);
-        jassert(sfgain >= 0.0f && sfgain <= 1.0f);
+        assert(sfgain >= 0.0f && sfgain <= 1.0f);
         m_partial_safetyfiltergains[i] = sfgain;
         sfgain = getShapingFilterGain(pf);
-        jassert(sfgain >= 0.0f && sfgain <= 1.0f);
+        assert(sfgain >= 0.0f && sfgain <= 1.0f);
         m_partial_shapingfiltergains[i] = sfgain;
         minf = std::min(minf, pf);
         maxf = std::max(maxf, pf);
 
-        jassert(m_partial_phaseincs[i] >= 0.0 && m_partial_phaseincs[i] < mkd::twoPi);
+        assert(m_partial_phaseincs[i] >= 0.0 && m_partial_phaseincs[i] < M_PI * 2);
     }
     m_cur_lowest_freq = minf;
     m_cur_highest_freq = maxf;
@@ -649,14 +652,14 @@ void AdditiveVoice::beginNote(int port_index, int channel, int key, int noteid, 
 {
     surge_lfo_update_counter = 0;
     m_cur_midi_note = key;
-    velo = juce::jmap<float>(velo, 0.0f, 1.0f, m_vel_respo, 0.0f);
-    m_cur_velo_gain = juce::Decibels::decibelsToGain(velo);
+    velo = xenakios::mapvalue<float>(velo, 0.0f, 1.0f, m_vel_respo, 0.0f);
+    m_cur_velo_gain = xenakios::decibelsToGain(velo);
     m_eg_gate = true;
     m_burst_gen->begin();
     m_is_available = false;
     m_eg0->attackFrom(0.0f, 0.0f, 0, true);
     m_eg1->attackFrom(0.0f, 0.0f, 0, true);
-    m_pitch_bend_smoother.reset(m_sr, 1.0);
+    m_pitch_bend_smoother.reset();
 
     for (int i = 0; i < maxnumpartials; ++i)
     {
@@ -670,9 +673,9 @@ void AdditiveVoice::setNumPartials(int n)
 {
     m_num_partials = juce::jlimit(2, maxnumpartials, n);
     float maxatten = -20.0f;
-    float attendb = juce::jmap<float>(m_num_partials, 2, 64, -6.0, maxatten);
+    float attendb = xenakios::mapvalue<float>(m_num_partials, 2, 64, -6.0, maxatten);
     attendb = juce::jlimit(maxatten, -6.0f, attendb);
-    m_partial_gain_compen = juce::Decibels::decibelsToGain(attendb);
+    m_partial_gain_compen = xenakios::decibelsToGain(attendb);
 }
 
 void AdditiveVoice::setSharedData(AdditiveSharedData *d)
@@ -761,7 +764,7 @@ void AdditiveVoice::step()
             for (int i = 0; i < AdditiveSharedData::MOS_LAST; ++i) // sources
             {
                 float modout = modulator_outs[i];
-                jassert((!std::isnan(modout)) && modout >= -100.0f && modout <= 100.0f);
+                assert((!std::isnan(modout)) && modout >= -100.0f && modout <= 100.0f);
                 for (int j = 0; j < AdditiveSharedData::MOT_LAST; ++j) // destinations
                 {
                     lfo_destinations[j] += modout * m_shared_data->modmatrix[i][j];
@@ -783,7 +786,7 @@ void AdditiveVoice::step()
 
             m_volume_lfo_mod = 24.0 * lfo_destinations[AdditiveSharedData::MOT_VOLUME];
             m_volume_lfo_mod = std::clamp(m_volume_lfo_mod + m_base_volume, -96.0f, 0.0f);
-            float volmodgain = juce::Decibels::decibelsToGain(m_volume_lfo_mod);
+            float volmodgain = xenakios::decibelsToGain(m_volume_lfo_mod);
             if (surge_lfo_update_counter == 0)
             {
                 // let's see how this goes...
@@ -839,7 +842,7 @@ void AdditiveVoice::step()
             // sum sines and advance phases
             // might be possible to do this as SIMD too, but won't bother for now
             float p0freq = m_partial_freqs[0];
-            float minatten = juce::jmap(p0freq, 256.0f, 10000.0f, 1.0f, 0.0f);
+            float minatten = xenakios::mapvalue(p0freq, 256.0f, 10000.0f, 1.0f, 0.0f);
             minatten = juce::jlimit(0.0f, 1.0f, minatten);
             minatten = minatten * minatten;
             outputs[0] = 0.0f;
@@ -891,8 +894,8 @@ void AdditiveVoice::step()
                     int panCoeffIndex =
                         (m_shared_data->pan_coefficients[0].size() - 1) * interp_pan;
                     // we both jassert and clamp, so we can catch in debug builds
-                    jassert(panCoeffIndex >= 0 &&
-                            panCoeffIndex < m_shared_data->pan_coefficients[0].size());
+                    assert(panCoeffIndex >= 0 &&
+                           panCoeffIndex < m_shared_data->pan_coefficients[0].size());
                     // panCoeffIndex =
                     // juce::jlimit<int>(0,(int)m_shared_data->pan_coefficients[0].size()-1,panCoeffIndex);
 
@@ -907,8 +910,8 @@ void AdditiveVoice::step()
 
                 float phase = m_partial_phases[i];
                 phase += m_partial_phaseincs[i];
-                if (phase >= mkd::twoPi)
-                    phase -= mkd::twoPi;
+                if (phase >= M_PI * 2)
+                    phase -= M_PI * 2;
                 m_partial_phases[i] = phase;
             }
 
@@ -922,7 +925,7 @@ void AdditiveVoice::step()
             float send_gain = m_aux_send_a + lfo_destinations[AdditiveSharedData::MOT_AUX_SEND_A];
             send_gain = juce::jlimit(0.0f, 1.0f, send_gain);
             send_gain = -48.0f + 48.0f * send_gain;
-            send_gain = juce::Decibels::decibelsToGain(send_gain);
+            send_gain = xenakios::decibelsToGain(send_gain);
 #ifdef KAS_BLOCK_VOICE_TEST
             block_output[0][outbufpos] =
                 outputs[0] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
@@ -972,11 +975,12 @@ void AdditiveSynth::prepare(double sampleRate)
     }
 }
 
-void AdditiveSynth::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuffer &midiMessages)
+void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
 {
 
     // yes, we know...no locks should be used, but this won't be contested much
-    juce::SpinLock::ScopedLockType locker(m_cs);
+    std::lock_guard<std::mutex> locker(m_cs);
+    
     // might want to avoid doing this for voices that are not active or
     // if parameters have not changed, but this will have to do for now
     int voicecount = 0;
@@ -987,6 +991,7 @@ void AdditiveSynth::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuf
             ++voicecount;
     }
     m_num_active_voices = voicecount;
+#ifdef HAVEJUCE
     auto bufptrs = buffer.getArrayOfWritePointers();
     auto it = midiMessages.begin();
     for (int i = 0; i < buffer.getNumSamples(); ++i)
@@ -1009,13 +1014,14 @@ void AdditiveSynth::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuf
             }
             else if (msg.isPitchWheel())
             {
-                float pitchamt = juce::jmap<float>(msg.getPitchWheelValue(), 0, 16383,
-                                                   -m_pitch_bend_range, m_pitch_bend_range);
+                float pitchamt = xenakios::mapvalue<float>(msg.getPitchWheelValue(), 0, 16383,
+                                                           -m_pitch_bend_range, m_pitch_bend_range);
                 handlePitchBend(-1, -1, pitchamt);
             }
             else if (msg.isAftertouch())
             {
-                float amt = juce::jmap<float>(msg.getAfterTouchValue(), 0.0f, 127.0, 0.0f, 1.0f);
+                float amt =
+                    xenakios::mapvalue<float>(msg.getAfterTouchValue(), 0.0f, 127.0, 0.0f, 1.0f);
                 handlePolyAfterTouch(-1, -1, msg.getNoteNumber(), amt);
             }
             else if (msg.isNoteOff())
@@ -1050,6 +1056,7 @@ void AdditiveSynth::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuf
             v.postProcessUpdate(buffer.getNumSamples());
         }
     }
+#endif
 }
 
 void AdditiveSynth::setPitchBendRange(double range) { m_pitch_bend_range = range; }
@@ -1166,7 +1173,7 @@ void AdditiveSynth::handlePitchBend(int port_index, int channel, float value)
         }
     }
 }
-
+#ifdef HAVEJUCE
 juce::String AdditiveSynth::importKBMText(juce::String text)
 {
     try
@@ -1201,7 +1208,8 @@ juce::String AdditiveSynth::importKBMFile(juce::File file)
     }
     return "";
 }
-
+#endif
+#ifdef HAVEJUCE
 juce::String AdditiveSynth::importScalaFile(juce::File file)
 {
     std::string fn = file.getFullPathName().toStdString();
@@ -1219,6 +1227,7 @@ juce::String AdditiveSynth::importScalaFile(juce::File file)
     }
     return "";
 }
+#endif
 void AdditiveSynth::setEDOParameters(double pseudoOctaveCents, int edo)
 {
 
@@ -1227,13 +1236,13 @@ void AdditiveSynth::setEDOParameters(double pseudoOctaveCents, int edo)
         try
         {
 
-            double t0 = juce::Time::getMillisecondCounterHiRes();
+            // double t0 = juce::Time::getMillisecondCounterHiRes();
             auto scale = Tunings::evenDivisionOfCentsByM(pseudoOctaveCents, edo);
             auto kbm = m_shared_data.fundamental_tuning.keyboardMapping;
             auto tuning = Tunings::Tuning(scale, kbm);
             m_shared_data.fundamental_tuning = tuning;
-            double t1 = juce::Time::getMillisecondCounterHiRes();
-            m_tuning_update_elapsed_ms = t1 - t0;
+            // double t1 = juce::Time::getMillisecondCounterHiRes();
+            m_tuning_update_elapsed_ms = 0.0f;
             m_pseudo_octave = pseudoOctaveCents;
             m_edo = edo;
             m_has_error = false;
@@ -1254,7 +1263,7 @@ float BurstGenerator::process()
     float tposnorm = getBurstTime(m_counter);
     if (m_counter < m_num_bursts && std::abs(m_phase - tposnorm * m_sr) <= 1.0)
     {
-        if (m_rng.nextDouble() < m_probability)
+        if (m_dist(m_rng) < m_probability)
         {
             env.attackFrom(cur_out, 0.0f, 0, true);
         }
@@ -1279,12 +1288,12 @@ float BurstGenerator::getBurstTime(int index)
     tposnorm = juce::jlimit(0.0f, 1.0f, tposnorm);
     if (m_distrib < 0.5)
     {
-        double raise_to = juce::jmap(m_distrib, 0.0, 0.5, 3.0, 1.0);
+        double raise_to = xenakios::mapvalue(m_distrib, 0.0, 0.5, 3.0, 1.0);
         tposnorm = std::pow(tposnorm, raise_to) * m_burst_duration;
     }
     else if (m_distrib > 0.5)
     {
-        double raise_to = juce::jmap(m_distrib, 0.5, 1.0, 1.0, 3.0);
+        double raise_to = xenakios::mapvalue(m_distrib, 0.5, 1.0, 1.0, 3.0);
         tposnorm = (1.0 - std::pow(1.0 - tposnorm, raise_to)) * m_burst_duration;
     }
     else
