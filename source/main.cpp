@@ -31,10 +31,10 @@ inline void test_klangas()
         for (auto &v : as->m_voices)
         {
             v.setNumPartials(32);
-            v.setADSRParameters(0, 0.2, 0.2, 0.5, 0.2);
+            v.setADSRParameters(0, 0.2, 0.6, 0.5, 0.2);
             v.setADSRParameters(1, 0.2, 0.2, 0.5, 0.2);
             // v.setTuningMode(0);
-            v.m_freq_tweaks_mode = 1;
+            v.m_freq_tweaks_mode = 0;
             v.m_freq_tweaks_mix = val;
             v.m_adsr_burst_mix = 0.0;
             v.m_base_volume = -6.0;
@@ -45,6 +45,7 @@ inline void test_klangas()
         }
 
         as->processBlock(procbuf.getView());
+        choc::buffer::applyGain(procbuf, 0.5);
         writer->appendFrames(procbuf.getView());
         outcount += bufsize;
     }
