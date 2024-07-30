@@ -15,7 +15,7 @@
 
 namespace juce
 {
-template <typename T> inline T jlimit(T val, T minval, T maxval)
+template <typename T> inline T jlimit(T minval, T maxval, T val)
 {
     return std::clamp(val, minval, maxval);
 }
@@ -379,7 +379,7 @@ class AdditiveSynth
 {
   public:
     AdditiveSynth();
-    void prepare(double sampleRate);
+    void prepare(double sampleRate, int maxbufsize);
     void processBlock(choc::buffer::ChannelArrayView<float> destBuf);
     AdditiveSharedData m_shared_data;
 
@@ -410,6 +410,7 @@ class AdditiveSynth
     void handlePolyAfterTouch(int port_index, int channel, int note, float value);
 
   private:
+    choc::buffer::ChannelArrayBuffer<float> m_mixbuf;
     int m_note_counter = 0;
     int m_time_pos_counter = 0;
     int m_kbm_start_note = -1;

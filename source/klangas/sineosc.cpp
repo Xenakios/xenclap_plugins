@@ -965,8 +965,9 @@ void AdditiveVoice::step()
 
 AdditiveSynth::AdditiveSynth() {}
 
-void AdditiveSynth::prepare(double sampleRate)
+void AdditiveSynth::prepare(double sampleRate, int maxbufsize)
 {
+    m_mixbuf = choc::buffer::ChannelArrayBuffer<float>(2, (unsigned int)maxbufsize);
     m_shared_data.sst_provider.setSampleRate(sampleRate);
     for (auto &e : m_voices)
     {
@@ -977,10 +978,11 @@ void AdditiveSynth::prepare(double sampleRate)
 
 void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
 {
-
     // yes, we know...no locks should be used, but this won't be contested much
     std::lock_guard<std::mutex> locker(m_cs);
-    
+    auto mixbufView =
+        m_mixbuf.getSection(choc::buffer::ChannelRange{0, 2}, {0, destBuf.getNumFrames()});
+    mixbufView.clear();
     // might want to avoid doing this for voices that are not active or
     // if parameters have not changed, but this will have to do for now
     int voicecount = 0;
@@ -991,6 +993,22 @@ void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
             ++voicecount;
     }
     m_num_active_voices = voicecount;
+    m_mixbuf.clear();
+    for (auto &v : m_voices)
+    {
+        if (!v.m_is_available)
+        {
+            for (int i = 0; i < destBuf.getNumFrames(); ++i)
+            {
+                v.step();
+                mixbufView.getSample(0, i) += v.output_frame[0];
+                mixbufView.getSample(1, i) += v.output_frame[1];
+            }
+        }
+    }
+    choc::buffer::applyGain(mixbufView, 1.0);
+    choc::buffer::copy(destBuf, mixbufView);
+    m_time_pos_counter += destBuf.getNumFrames();
 #ifdef HAVEJUCE
     auto bufptrs = buffer.getArrayOfWritePointers();
     auto it = midiMessages.begin();
