@@ -12,6 +12,8 @@ include_directories(
     libs/sst-basic-blocks/include
     libs/fmt/include
     libs/sst-voicemanager/include
+    libs/tuning-library/include
+    source/noiseplethora/noise-plethora/rack/include/simd
 )
 
 project(xenclapplugins)
@@ -74,3 +76,18 @@ add_library(noiseplethora
 file(GLOB_RECURSE NPSOURCES ${CMAKE_CURRENT_SOURCE_DIR}/source/noiseplethora/noise-plethora/teensy/*.cpp)
 target_sources(noiseplethora PRIVATE ${NPSOURCES})
 target_compile_definitions(noiseplethora PRIVATE _USE_MATH_DEFINES=1)
+
+add_library(KlangAS MODULE
+source/klangas/klangassynth.cpp
+source/klangas/sineosc.cpp
+)
+
+set_target_properties(KlangAS PROPERTIES SUFFIX ".clap" PREFIX "")
+target_compile_definitions(KlangAS PRIVATE _USE_MATH_DEFINES=1 IS_WIN=1)
+target_link_libraries(KlangAS PRIVATE fmt)
+set(products_folder ${CMAKE_BINARY_DIR})
+    set(build_type ${CMAKE_BUILD_TYPE})
+    add_custom_command(
+        TARGET KlangAS POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${products_folder}/KlangAS.clap" "C:\\Program Files\\Common Files\\CLAP"
+    )
