@@ -91,3 +91,11 @@ set(products_folder ${CMAKE_BINARY_DIR})
         TARGET KlangAS POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "${products_folder}/KlangAS.clap" "C:\\Program Files\\Common Files\\CLAP"
     )
+
+add_executable(TestingProgram 
+source/klangas/sineosc.cpp
+source/main.cpp
+
+)
+
+target_compile_definitions(TestingProgram PRIVATE NOJUCE=1 _USE_MATH_DEFINES=1 __WINDOWS_WASAPI__)
