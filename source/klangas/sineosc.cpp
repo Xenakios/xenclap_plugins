@@ -1006,75 +1006,14 @@ void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
             }
         }
     }
+    for (int i = 0; i < mixbufView.getNumFrames(); ++i)
+    {
+        mixbufView.getSample(0, i) = std::tanh(mixbufView.getSample(0, i));
+        mixbufView.getSample(1, i) = std::tanh(mixbufView.getSample(1, i));
+    }
     choc::buffer::applyGain(mixbufView, 1.0);
     choc::buffer::copy(destBuf, mixbufView);
     m_time_pos_counter += destBuf.getNumFrames();
-#ifdef HAVEJUCE
-    auto bufptrs = buffer.getArrayOfWritePointers();
-    auto it = midiMessages.begin();
-    for (int i = 0; i < buffer.getNumSamples(); ++i)
-    {
-        // Using while, because we may have multiple messages at the same sample position
-        // This might be somewhat inefficient in Juce context, but we will do this like this
-        // because Clap processing will require doing it similarly anyway
-        while (it != midiMessages.end() && (*it).samplePosition == i)
-        {
-            // suspected inefficiency here because getMessage returns a copy for some reason
-            const auto msg = (*it).getMessage();
-            if (msg.isController())
-            {
-                handleCC(-1, -1, msg.getControllerNumber(), msg.getControllerValue());
-            }
-            else if (msg.isNoteOn())
-            {
-                handleNoteOn(-1, -1, msg.getNoteNumber(), -1, msg.getFloatVelocity());
-                // DBG(msg.getTimeStamp() << " " << msg.getDescription());
-            }
-            else if (msg.isPitchWheel())
-            {
-                float pitchamt = xenakios::mapvalue<float>(msg.getPitchWheelValue(), 0, 16383,
-                                                           -m_pitch_bend_range, m_pitch_bend_range);
-                handlePitchBend(-1, -1, pitchamt);
-            }
-            else if (msg.isAftertouch())
-            {
-                float amt =
-                    xenakios::mapvalue<float>(msg.getAfterTouchValue(), 0.0f, 127.0, 0.0f, 1.0f);
-                handlePolyAfterTouch(-1, -1, msg.getNoteNumber(), amt);
-            }
-            else if (msg.isNoteOff())
-            {
-                handleNoteOff(-1, -1, msg.getNoteNumber(), -1);
-                // DBG(msg.getDescription());
-            }
-            ++it;
-        }
-        float voicesums[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        for (auto &v : m_voices)
-        {
-            if (v.m_is_available == false)
-            {
-                v.step();
-                voicesums[0] += v.output_frame[0];
-                voicesums[1] += v.output_frame[1];
-                voicesums[2] += v.output_frame[2];
-                voicesums[3] += v.output_frame[3];
-            }
-        }
-        bufptrs[0][i] = voicesums[0];
-        bufptrs[1][i] = voicesums[1];
-        bufptrs[2][i] = voicesums[2];
-        bufptrs[3][i] = voicesums[3];
-        ++m_time_pos_counter;
-    }
-    for (auto &v : m_voices)
-    {
-        if (!v.m_is_available)
-        {
-            v.postProcessUpdate(buffer.getNumSamples());
-        }
-    }
-#endif
 }
 
 void AdditiveSynth::setPitchBendRange(double range) { m_pitch_bend_range = range; }

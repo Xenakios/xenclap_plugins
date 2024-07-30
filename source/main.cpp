@@ -22,11 +22,11 @@ inline void test_klangas()
     as->handleNoteOn(0, 0, 40, -1, 1.0);
     int outlen = 10 * sr;
     int outcount = 0;
-    as->m_shared_data.setVolumeMorphPreset(0);
+    as->m_shared_data.setVolumeMorphPreset(1);
     as->m_shared_data.setPanMorphPreset(0);
     while (outcount < outlen)
     {
-        double val = 0.0 + 1.0 / outlen * outcount;
+        double val = std::fmod(1.0 / 88200 * outcount, 1.0f);
         val = std::clamp(val, 0.0, 1.0);
         for (auto &v : as->m_voices)
         {
@@ -35,17 +35,17 @@ inline void test_klangas()
             v.setADSRParameters(1, 0.2, 0.2, 0.5, 0.2);
             // v.setTuningMode(0);
             v.m_freq_tweaks_mode = 0;
-            v.m_freq_tweaks_mix = val;
+            v.m_freq_tweaks_mix = 0;
             v.m_adsr_burst_mix = 0.0;
-            v.m_base_volume = -6.0;
-            v.m_filter_morph = 1.0;
-            v.m_filter_mode = 0;
+            v.m_base_volume = -9.0;
+            v.m_filter_morph = val;
+            v.m_filter_mode = 2;
             v.setPartialsBalance(1.0);
-            v.setPartialsPanMorph(0.0);
+            v.setPartialsPanMorph(0.1);
         }
 
         as->processBlock(procbuf.getView());
-        choc::buffer::applyGain(procbuf, 0.5);
+        choc::buffer::applyGain(procbuf, 0.9);
         writer->appendFrames(procbuf.getView());
         outcount += bufsize;
     }
