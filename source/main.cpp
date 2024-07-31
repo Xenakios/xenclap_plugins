@@ -5,14 +5,14 @@
 inline void test_klangas()
 {
     double sr = 44100.0;
-    unsigned int bufsize = 64;
+    unsigned int bufsize = 441;
     choc::audio::AudioFileProperties props;
     props.bitDepth = choc::audio::BitDepth::float32;
     props.numChannels = 2;
     props.formatName = "WAV";
     props.sampleRate = sr;
     choc::audio::WAVAudioFileFormat<true> wavformat;
-    auto writer = wavformat.createWriter("C:/develop/xen_clap_plugins/klangasnew01.wav", props);
+    auto writer = wavformat.createWriter("C:/develop/xen_clap_plugins/klangasnew02.wav", props);
     choc::buffer::ChannelArrayBuffer<float> procbuf{2, bufsize};
     procbuf.clear();
     auto as = std::make_unique<AdditiveSynth>();

@@ -13,7 +13,7 @@
 #include <mutex>
 #include "sst/basic-blocks/dsp/FollowSlewAndSmooth.h"
 
-namespace juce
+namespace xenakios
 {
 template <typename T> inline T jlimit(T minval, T maxval, T val)
 {
@@ -230,7 +230,7 @@ class AdditiveVoice
 
     void setSampleRate(float hz);
 
-    void setFundamental(float hz) { m_fundamental_freq = juce::jlimit(20.0f, 6000.0f, hz); }
+    void setFundamental(float hz) { m_fundamental_freq = xenakios::jlimit(20.0f, 6000.0f, hz); }
     void setNumPartials(int n);
 
     float m_partial_gain_compen = 1.0f;
@@ -315,7 +315,8 @@ class AdditiveVoice
     void setKeyShift(int s) { m_key_shift = s; }
     int m_cur_midi_note = -1;
     double m_cur_velo_gain = 0.0;
-    void step(); // produce next output sample frame
+    // accumulate into buffer
+    void process(choc::buffer::ChannelArrayView<float> destBuf);
     alignas(16) float output_frame[4];
     alignas(16) float block_output[4][256];
     float m_aux_send_a = 0.0f;

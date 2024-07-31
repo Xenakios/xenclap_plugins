@@ -32,7 +32,7 @@ AdditiveSharedData::MorphTableType AdditiveSharedData::readFromFile(juce::File f
         for (int j = 0; j < numtoparse; ++j)
         {
             float gain = tokens[j].getFloatValue();
-            gain = juce::jlimit(0.0f, 1.0f, gain);
+            gain = xenakios::jlimit(0.0f, 1.0f, gain);
             result[i][j] = gain;
         }
     }
@@ -112,7 +112,7 @@ float AdditiveSharedData::getSafetyFilterCoefficient(float hz)
     int index = (int)xenakios::mapvalue<float>(hz, minpartialfrequency, maxpartialfrequency, 0.0f,
                                                safety_filter.size() - 1);
     assert(index >= 0 && index < safety_filter.size());
-    // index = juce::jlimit<int>(0,safety_filter.size()-1,index);
+    // index = xenakios::jlimit<int>(0,safety_filter.size()-1,index);
     return safety_filter[index];
 }
 
@@ -389,7 +389,7 @@ float AdditiveVoice::getShapingFilterGain(float hz)
             int order = (m_filter_mode + 1) * 2;
             float diff = octave - cutoff;
             float g = 1.0 / (std::pow(2.0f, diff * order));
-            g = juce::jlimit(0.0f, 1.0f, g);
+            g = xenakios::jlimit(0.0f, 1.0f, g);
             return g;
         }
         return 1.0f;
@@ -398,14 +398,14 @@ float AdditiveVoice::getShapingFilterGain(float hz)
     {
         float offset = M_PI * 2 * m_filter_morph_mod;
         float g = 0.5f + 0.5f * std::sin(M_PI * 2 / 11 * octave * 8 + offset);
-        g = juce::jlimit(0.0f, 1.0f, g);
+        g = xenakios::jlimit(0.0f, 1.0f, g);
         return g;
     }
     else if (m_filter_mode == 3)
     {
         float offset = m_filter_morph_mod;
         float g = std::fmod(octave + offset, 1.0f);
-        g = juce::jlimit(0.0f, 1.0f, g);
+        g = xenakios::jlimit(0.0f, 1.0f, g);
         return g;
     }
     else if (m_filter_mode == 4)
@@ -418,7 +418,7 @@ float AdditiveVoice::getShapingFilterGain(float hz)
         float v0 = m_shared_data->voice_random_filter_gains[i0];
         float v1 = m_shared_data->voice_random_filter_gains[i1];
         float g = v0 + (v1 - v0) * frac;
-        g = juce::jlimit(0.0f, 1.0f, g);
+        g = xenakios::jlimit(0.0f, 1.0f, g);
         return g;
         float octave_min = 5.0 + m_filter_morph_mod * 2;
         float octave_max = 6.0 + m_filter_morph_mod * 2;
@@ -623,7 +623,7 @@ void AdditiveVoice::updateState()
         float tweakratio =
             xenakios::mapvalue<float>(m_freq_tweaks_mix_mod, 0.0f, 1.0f, 1.0f, targetratio);
         float pf = m_partial_freqs[i] * tweakratio;
-        pf = juce::jlimit(AdditiveSharedData::minpartialfrequency,
+        pf = xenakios::jlimit(AdditiveSharedData::minpartialfrequency,
                           AdditiveSharedData::maxpartialfrequency, pf);
         assert(!std::isnan(pf));
         float phaseinc = M_PI * 2 / m_sr * pf;
@@ -675,10 +675,10 @@ void AdditiveVoice::setSampleRate(float hz) { m_sr = hz; }
 
 void AdditiveVoice::setNumPartials(int n)
 {
-    m_num_partials = juce::jlimit(2, maxnumpartials, n);
+    m_num_partials = xenakios::jlimit(2, maxnumpartials, n);
     float maxatten = -20.0f;
     float attendb = xenakios::mapvalue<float>(m_num_partials, 2, 64, -6.0, maxatten);
-    attendb = juce::jlimit(maxatten, -6.0f, attendb);
+    attendb = xenakios::jlimit(maxatten, -6.0f, attendb);
     m_partial_gain_compen = xenakios::decibelsToGain(attendb);
 }
 
@@ -694,275 +694,222 @@ void AdditiveVoice::setSharedData(AdditiveSharedData *d)
 
 #pragma float_control(precise, off, push)
 
-void AdditiveVoice::step()
+void AdditiveVoice::process(choc::buffer::ChannelArrayView<float> destBuf)
 {
-    /*
-    if (surge_lfo_update_counter == 0)
-    {
-        updateState();
-    }
-    ++surge_lfo_update_counter;
-    if (surge_lfo_update_counter == SRProvider::BLOCK_SIZE)
-        surge_lfo_update_counter = 0;
-    output_frame[0] = 0.0f;
-    output_frame[1] = 0.0f;
-    output_frame[2] = 0.0f;
-    output_frame[3] = 0.0f;
-    return;
-    */
+    static const int shapetranslate[7] = {0, 1, 3, 4, 5, 6, 7};
     const int voicestepgranul = 64;
-#ifdef KAS_BLOCK_VOICE_TEST
-    if (voice_step_update_counter == 0)
-#endif
+    alignas(16) const int numpartslocal = m_num_partials;
+    alignas(32) float partial_outputs[maxnumpartials + 4];
+    alignas(16) float outputs[2] = {0.0f, 0.0f};
+    alignas(32) float lfo_destinations[AdditiveSharedData::MOT_LAST];
+    alignas(32) float modulator_outs[AdditiveSharedData::MOS_LAST];
+    int nframes = destBuf.getNumFrames();
+    for (int outbufpos = 0; outbufpos < nframes; ++outbufpos)
     {
-        alignas(16) const int numpartslocal = m_num_partials;
-        alignas(32) float partial_outputs[maxnumpartials + 4];
-        alignas(16) float outputs[2] = {0.0f, 0.0f};
-        alignas(32) float lfo_destinations[AdditiveSharedData::MOT_LAST];
-        alignas(32) float modulator_outs[AdditiveSharedData::MOS_LAST];
-#ifdef KAS_BLOCK_VOICE_TEST
-        for (int outbufpos = 0; outbufpos < voicestepgranul; ++outbufpos)
-#endif
+        for (int i = 0; i < AdditiveSharedData::MOT_LAST; ++i)
+            lfo_destinations[i] = 0.0f;
+        if (surge_lfo_update_counter == 0)
         {
-            for (int i = 0; i < AdditiveSharedData::MOT_LAST; ++i)
-                lfo_destinations[i] = 0.0f;
-            if (surge_lfo_update_counter == 0)
-            {
-                m_eg0->processBlock(m_eg0_params.a, m_eg0_params.d, m_eg0_params.s, m_eg0_params.r,
-                                    1, 1, 1, m_eg_gate);
-                m_eg1->processBlock(m_eg1_params.a, m_eg1_params.d, m_eg1_params.s, m_eg1_params.r,
-                                    1, 1, 1, m_eg_gate);
-                // The SST LFO for some reason has a separate type for downward ramp
-                // but we don't need that since the modulation can be applied negatively.
-                // So we map our choice parameter with 7 shapes to the 8 shapes of the SST LFO
-                // by skipping the downward ramp shape
-                static const int shapetranslate[7] = {0, 1, 3, 4, 5, 6, 7};
-                for (int i = 0; i < 4; ++i)
-                {
-                    int translated = shapetranslate[m_lfo_types[i]];
-                    surge_lfo[i]->process_block(m_lfo_rates[i], m_lfo_deforms[i], translated,
-                                                false);
-                }
-            }
+            m_eg0->processBlock(m_eg0_params.a, m_eg0_params.d, m_eg0_params.s, m_eg0_params.r, 1,
+                                1, 1, m_eg_gate);
+            m_eg1->processBlock(m_eg1_params.a, m_eg1_params.d, m_eg1_params.s, m_eg1_params.r, 1,
+                                1, 1, m_eg_gate);
+            // The SST LFO for some reason has a separate type for downward ramp
+            // but we don't need that since the modulation can be applied negatively.
+            // So we map our choice parameter with 7 shapes to the 8 shapes of the SST LFO
+            // by skipping the downward ramp shape
 
             for (int i = 0; i < 4; ++i)
             {
-                modulator_outs[i] = surge_lfo[i]->outputBlock[surge_lfo_update_counter];
-                if (modulator_unipolar[i])
-                    modulator_outs[i] = 1.0f + modulator_outs[i];
+                int translated = shapetranslate[m_lfo_types[i]];
+                surge_lfo[i]->process_block(m_lfo_rates[i], m_lfo_deforms[i], translated, false);
             }
-
-            float envgain = m_eg0->outputCache[surge_lfo_update_counter];
-            modulator_outs[AdditiveSharedData::MOS_EG0] = envgain - m_adsr_sustain_level;
-            float auxegval = m_eg1->outputCache[surge_lfo_update_counter];
-            modulator_outs[AdditiveSharedData::MOS_EG1] = auxegval;
-            float burst_eg = 0.0; // m_burst_gen->process();
-            modulator_outs[AdditiveSharedData::MOS_BURST] = burst_eg;
-            modulator_outs[AdditiveSharedData::MOS_POLYAT] = m_after_touch_amount * 2.0f;
-            for (int i = 0; i < 4; ++i)
-                modulator_outs[AdditiveSharedData::MOS_CC_A + i] =
-                    m_cc_smoothers[i].process(m_cc_vals[i]) * 2.0f;
-            alignas(32) float lfo_destinations[AdditiveSharedData::MOT_LAST] = {
-                0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-
-            for (int i = 0; i < AdditiveSharedData::MOS_LAST; ++i) // sources
-            {
-                float modout = modulator_outs[i];
-                assert((!std::isnan(modout)) && modout >= -100.0f && modout <= 100.0f);
-                for (int j = 0; j < AdditiveSharedData::MOT_LAST; ++j) // destinations
-                {
-                    lfo_destinations[j] += modout * m_shared_data->modmatrix[i][j];
-                }
-            }
-
-            m_pitch_lfo_mod = lfo_destinations[AdditiveSharedData::MOT_PITCH] * 12.0;
-
-            m_freq_tweaks_mix_mod =
-                m_freq_tweaks_mix + lfo_destinations[AdditiveSharedData::MOT_PARTREMAPMORPH] * 0.5f;
-
-            m_freq_tweaks_mix_mod = juce::jlimit(0.0f, 1.0f, m_freq_tweaks_mix_mod);
-            // if (m_freq_tweaks_mode!=3)
-            //     m_freq_tweaks_mix_mod = 1.0-std::pow(1.0-m_freq_tweaks_mix_mod,2.0f);
-
-            m_filter_morph_mod =
-                m_filter_morph + lfo_destinations[AdditiveSharedData::MOT_FILTERMORPH] * 0.5f;
-            m_filter_morph_mod = juce::jlimit(0.0f, 1.0f, m_filter_morph_mod);
-
-            m_volume_lfo_mod = 24.0 * lfo_destinations[AdditiveSharedData::MOT_VOLUME];
-            m_volume_lfo_mod = std::clamp(m_volume_lfo_mod + m_base_volume, -96.0f, 0.0f);
-            float volmodgain = xenakios::decibelsToGain(m_volume_lfo_mod);
-            if (surge_lfo_update_counter == 0)
-            {
-                // let's see how this goes...
-                updateState();
-            }
-
-#ifdef KLANGAS_AVX
-            // calculate SIMD sines with AVX
-            for (int i = 0; i < m_num_partials; i += 8)
-            {
-                alignas(32) v8sf temp = _mm256_loadu_ps(&m_partial_phases[i]);
-                temp = sin256_ps(temp);
-                _mm256_storeu_ps(&m_output_samples[i], temp);
-            }
-#else
-            // calculate SIMD sines with SSE
-            float phaseslocal[64];
-            for (int i = 0; i < 64; ++i)
-                phaseslocal[i] = m_partial_phases[i];
-            for (alignas(16) int i = 0; i < numpartslocal; i += 4)
-            {
-
-                alignas(32) __m128 temp = _mm_loadu_ps(&phaseslocal[i]);
-                temp = sse_mathfun_sin_ps(temp);
-                _mm_storeu_ps(&partial_outputs[i], temp);
-
-                /*
-                partial_outputs[i+0]=0.0f;
-                partial_outputs[i+1]=0.0f;
-                partial_outputs[i+2]=0.0f;
-                partial_outputs[i+3]=0.0f;
-                */
-            }
-
-#endif
-            float amp_morph =
-                m_partials_bal + lfo_destinations[AdditiveSharedData::MOT_PARTVOLS_MORPH] * 0.5f;
-            amp_morph = juce::jlimit<float>(0.0f, 1.0f, amp_morph);
-            m_amp_morph_vis = amp_morph;
-            amp_morph = amp_morph * (AdditiveSharedData::maxampframes - 1);
-            int amp_morph_i0 = amp_morph;
-            int amp_morph_i1 = amp_morph_i0 + 1;
-            float amp_morph_frac = amp_morph - amp_morph_i0;
-
-            float pan_morph = m_partials_pan_morph +
-                              lfo_destinations[AdditiveSharedData::MOT_PARTPANS_MORPH] * 0.5f;
-            pan_morph = juce::jlimit<float>(0.0f, 1.0f, pan_morph);
-            pan_morph = pan_morph * (AdditiveSharedData::maxpanframes - 1);
-            int pan_morph_i0 = pan_morph;
-            int pan_morph_i1 = pan_morph_i0 + 1;
-            float pan_morph_frac = pan_morph - pan_morph_i0;
-
-            // sum sines and advance phases
-            // might be possible to do this as SIMD too, but won't bother for now
-            float p0freq = m_partial_freqs[0];
-            float minatten = xenakios::mapvalue(p0freq, 256.0f, 10000.0f, 1.0f, 0.0f);
-            minatten = juce::jlimit(0.0f, 1.0f, minatten);
-            minatten = minatten * minatten;
-            outputs[0] = 0.0f;
-            outputs[1] = 0.0f;
-            for (int i = 0; i < numpartslocal; ++i)
-            {
-                // partials may sometimes go beyond reasonable limits, so only sum the ones within
-                // frequency limits
-                float pfreq = m_partial_freqs[i];
-                if (pfreq >= AdditiveSharedData::minpartialfrequency &&
-                    pfreq < AdditiveSharedData::maxpartialfrequency)
-                {
-                    float gain0 = m_shared_data->partialsmorphtable[amp_morph_i0][i];
-                    float gain1 = m_shared_data->partialsmorphtable[amp_morph_i1][i];
-                    // main partial frequency morphing
-                    float interp_gain = gain0 + (gain1 - gain0) * amp_morph_frac;
-                    // creative filter
-                    interp_gain *= m_partial_shapingfiltergains[i];
-                    // extreme low and high frequency cutoffs
-                    interp_gain *= m_partial_safetyfiltergains[i];
-                    // one pole lowpass filtering for the gain changes
-                    float &old = m_partial_vol_smoothing_history[i];
-                    float smoothed = interp_gain + m_gain_smoothing_coeff * (old - interp_gain);
-                    interp_gain = smoothed;
-                    old = smoothed;
-
-                    m_partial_amplitudes[i] = interp_gain; // for visualization
-
-                    float pan0 = m_shared_data->partialspanmorphtable[pan_morph_i0][i];
-                    float pan1 = m_shared_data->partialspanmorphtable[pan_morph_i1][i];
-                    float interp_pan = pan0 + (pan1 - pan0) * pan_morph_frac;
-                    interp_pan -= 0.5f;  // is now -0.5 to 0.5
-                    interp_pan += m_pan; // if voice pan at 0.5, back to 0.0 to 1.0
-                    // however, if voice pan is at say 0.75, adding 0.5 would make 1.25 which we
-                    // can't handle so reflect back inside the 0 to 1 range this could have at least
-                    // 3 modes : clamp, reflect and wrap which we might make a parameter/option
-                    // later
-                    if (interp_pan >= 1.0f)
-                        interp_pan = 1.0f - (interp_pan - 1.0f);
-                    else if (interp_pan < 0.0f)
-                        interp_pan = -interp_pan;
-                    // we have the valid pan value
-                    // and now smooth with lowpass filters...
-                    float &oldpan = m_partial_pan_smoothing_history[i];
-                    smoothed = interp_pan + m_pan_smoothing_coeff * (oldpan - interp_pan);
-                    oldpan = smoothed;
-                    interp_pan = smoothed;
-                    m_partial_pans[i] = interp_pan; // for visualization
-                    int panCoeffIndex =
-                        (m_shared_data->pan_coefficients[0].size() - 1) * interp_pan;
-                    // we both jassert and clamp, so we can catch in debug builds
-                    assert(panCoeffIndex >= 0 &&
-                           panCoeffIndex < m_shared_data->pan_coefficients[0].size());
-                    // panCoeffIndex =
-                    // juce::jlimit<int>(0,(int)m_shared_data->pan_coefficients[0].size()-1,panCoeffIndex);
-
-                    float leftGain = m_shared_data->pan_coefficients[0][panCoeffIndex];
-                    float rightGain = m_shared_data->pan_coefficients[1][panCoeffIndex];
-                    float po = partial_outputs[i] * interp_gain;
-                    outputs[1] += po * rightGain;
-                    outputs[0] += po * leftGain;
-                }
-                else
-                    m_partial_amplitudes[i] = 0.0f; // for visualization
-
-                float phase = m_partial_phases[i];
-                phase += m_partial_phaseincs[i];
-                if (phase >= M_PI * 2)
-                    phase -= M_PI * 2;
-                m_partial_phases[i] = phase;
-            }
-
-            m_adsr_burst_mix = 0.0f;
-            float finalgain = (1.0 - m_adsr_burst_mix) * envgain + m_adsr_burst_mix * burst_eg;
-            finalgain *= volmodgain;
-            // might want to visualize velocity too, but let's not, for now
-            m_adsr_vis_amp = finalgain;
-            // output_frame[0] = output*envgain*m_cur_velo*m_pan;
-            // output_frame[1] = output*envgain*m_cur_velo*(1.0-m_pan);
-            float send_gain = m_aux_send_a + lfo_destinations[AdditiveSharedData::MOT_AUX_SEND_A];
-            send_gain = juce::jlimit(0.0f, 1.0f, send_gain);
-            send_gain = -48.0f + 48.0f * send_gain;
-            send_gain = xenakios::decibelsToGain(send_gain);
-#ifdef KAS_BLOCK_VOICE_TEST
-            block_output[0][outbufpos] =
-                outputs[0] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
-            block_output[1][outbufpos] =
-                outputs[1] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
-            block_output[2][outbufpos] = block_output[0][outbufpos] * send_gain;
-            block_output[3][outbufpos] = block_output[1][outbufpos] * send_gain;
-#else
-            output_frame[0] = outputs[0] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
-            output_frame[1] = outputs[1] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
-            output_frame[2] = output_frame[0] * send_gain;
-            output_frame[3] = output_frame[1] * send_gain;
-#endif
-
-            // deactivate voice when ADSR finished
-            if (m_eg0->stage == VoiceEG::s_eoc)
-            {
-                m_is_available = true;
-            }
-            ++surge_lfo_update_counter;
-            if (surge_lfo_update_counter == SRProvider::BLOCK_SIZE)
-                surge_lfo_update_counter = 0;
         }
+
+        for (int i = 0; i < 4; ++i)
+        {
+            modulator_outs[i] = surge_lfo[i]->outputBlock[surge_lfo_update_counter];
+            if (modulator_unipolar[i])
+                modulator_outs[i] = 1.0f + modulator_outs[i];
+        }
+
+        float envgain = m_eg0->outputCache[surge_lfo_update_counter];
+        modulator_outs[AdditiveSharedData::MOS_EG0] = envgain - m_adsr_sustain_level;
+        float auxegval = m_eg1->outputCache[surge_lfo_update_counter];
+        modulator_outs[AdditiveSharedData::MOS_EG1] = auxegval;
+        float burst_eg = 0.0; // m_burst_gen->process();
+        modulator_outs[AdditiveSharedData::MOS_BURST] = burst_eg;
+        modulator_outs[AdditiveSharedData::MOS_POLYAT] = m_after_touch_amount * 2.0f;
+        for (int i = 0; i < 4; ++i)
+            modulator_outs[AdditiveSharedData::MOS_CC_A + i] =
+                m_cc_smoothers[i].process(m_cc_vals[i]) * 2.0f;
+        alignas(32) float lfo_destinations[AdditiveSharedData::MOT_LAST] = {0.0f, 0.0f, 0.0f, 0.0f,
+                                                                            0.0f, 0.0f, 0.0f};
+        for (int i = 0; i < AdditiveSharedData::MOS_LAST; ++i) // sources
+        {
+            float modout = modulator_outs[i];
+            assert((!std::isnan(modout)) && modout >= -100.0f && modout <= 100.0f);
+            for (int j = 0; j < AdditiveSharedData::MOT_LAST; ++j) // destinations
+            {
+                lfo_destinations[j] += modout * m_shared_data->modmatrix[i][j];
+            }
+        }
+
+        m_pitch_lfo_mod = lfo_destinations[AdditiveSharedData::MOT_PITCH] * 12.0;
+
+        m_freq_tweaks_mix_mod =
+            m_freq_tweaks_mix + lfo_destinations[AdditiveSharedData::MOT_PARTREMAPMORPH] * 0.5f;
+
+        m_freq_tweaks_mix_mod = xenakios::jlimit(0.0f, 1.0f, m_freq_tweaks_mix_mod);
+        // if (m_freq_tweaks_mode!=3)
+        //     m_freq_tweaks_mix_mod = 1.0-std::pow(1.0-m_freq_tweaks_mix_mod,2.0f);
+
+        m_filter_morph_mod =
+            m_filter_morph + lfo_destinations[AdditiveSharedData::MOT_FILTERMORPH] * 0.5f;
+        m_filter_morph_mod = xenakios::jlimit(0.0f, 1.0f, m_filter_morph_mod);
+
+        m_volume_lfo_mod = 24.0 * lfo_destinations[AdditiveSharedData::MOT_VOLUME];
+        m_volume_lfo_mod = std::clamp(m_volume_lfo_mod + m_base_volume, -96.0f, 0.0f);
+        float volmodgain = xenakios::decibelsToGain(m_volume_lfo_mod);
+        if (surge_lfo_update_counter == 0)
+        {
+            // let's see how this goes...
+            updateState();
+        }
+
+        // calculate SIMD sines with SSE
+        float phaseslocal[64];
+        for (int i = 0; i < 64; ++i)
+            phaseslocal[i] = m_partial_phases[i];
+        for (alignas(16) int i = 0; i < numpartslocal; i += 4)
+        {
+
+            alignas(32) __m128 temp = _mm_loadu_ps(&phaseslocal[i]);
+            temp = sse_mathfun_sin_ps(temp);
+            _mm_storeu_ps(&partial_outputs[i], temp);
+        }
+
+        float amp_morph =
+            m_partials_bal + lfo_destinations[AdditiveSharedData::MOT_PARTVOLS_MORPH] * 0.5f;
+        amp_morph = xenakios::jlimit<float>(0.0f, 1.0f, amp_morph);
+        m_amp_morph_vis = amp_morph;
+        amp_morph = amp_morph * (AdditiveSharedData::maxampframes - 1);
+        int amp_morph_i0 = amp_morph;
+        int amp_morph_i1 = amp_morph_i0 + 1;
+        float amp_morph_frac = amp_morph - amp_morph_i0;
+
+        float pan_morph =
+            m_partials_pan_morph + lfo_destinations[AdditiveSharedData::MOT_PARTPANS_MORPH] * 0.5f;
+        pan_morph = xenakios::jlimit<float>(0.0f, 1.0f, pan_morph);
+        pan_morph = pan_morph * (AdditiveSharedData::maxpanframes - 1);
+        int pan_morph_i0 = pan_morph;
+        int pan_morph_i1 = pan_morph_i0 + 1;
+        float pan_morph_frac = pan_morph - pan_morph_i0;
+
+        // sum sines and advance phases
+        // might be possible to do this as SIMD too, but won't bother for now
+        float p0freq = m_partial_freqs[0];
+        float minatten = xenakios::mapvalue(p0freq, 256.0f, 10000.0f, 1.0f, 0.0f);
+        minatten = xenakios::jlimit(0.0f, 1.0f, minatten);
+        minatten = minatten * minatten;
+        outputs[0] = 0.0f;
+        outputs[1] = 0.0f;
+        for (int i = 0; i < numpartslocal; ++i)
+        {
+            // partials may sometimes go beyond reasonable limits, so only sum the ones within
+            // frequency limits
+            float pfreq = m_partial_freqs[i];
+            if (pfreq >= AdditiveSharedData::minpartialfrequency &&
+                pfreq < AdditiveSharedData::maxpartialfrequency)
+            {
+                float gain0 = m_shared_data->partialsmorphtable[amp_morph_i0][i];
+                float gain1 = m_shared_data->partialsmorphtable[amp_morph_i1][i];
+                // main partial frequency morphing
+                float interp_gain = gain0 + (gain1 - gain0) * amp_morph_frac;
+                // creative filter
+                interp_gain *= m_partial_shapingfiltergains[i];
+                // extreme low and high frequency cutoffs
+                interp_gain *= m_partial_safetyfiltergains[i];
+                // one pole lowpass filtering for the gain changes
+                float &old = m_partial_vol_smoothing_history[i];
+                float smoothed = interp_gain + m_gain_smoothing_coeff * (old - interp_gain);
+                interp_gain = smoothed;
+                old = smoothed;
+
+                m_partial_amplitudes[i] = interp_gain; // for visualization
+
+                float pan0 = m_shared_data->partialspanmorphtable[pan_morph_i0][i];
+                float pan1 = m_shared_data->partialspanmorphtable[pan_morph_i1][i];
+                float interp_pan = pan0 + (pan1 - pan0) * pan_morph_frac;
+                interp_pan -= 0.5f;  // is now -0.5 to 0.5
+                interp_pan += m_pan; // if voice pan at 0.5, back to 0.0 to 1.0
+                // however, if voice pan is at say 0.75, adding 0.5 would make 1.25 which we
+                // can't handle so reflect back inside the 0 to 1 range this could have at least
+                // 3 modes : clamp, reflect and wrap which we might make a parameter/option
+                // later
+                if (interp_pan >= 1.0f)
+                    interp_pan = 1.0f - (interp_pan - 1.0f);
+                else if (interp_pan < 0.0f)
+                    interp_pan = -interp_pan;
+                // we have the valid pan value
+                // and now smooth with lowpass filters...
+                float &oldpan = m_partial_pan_smoothing_history[i];
+                smoothed = interp_pan + m_pan_smoothing_coeff * (oldpan - interp_pan);
+                oldpan = smoothed;
+                interp_pan = smoothed;
+                m_partial_pans[i] = interp_pan; // for visualization
+                int panCoeffIndex = (m_shared_data->pan_coefficients[0].size() - 1) * interp_pan;
+                // we both jassert and clamp, so we can catch in debug builds
+                assert(panCoeffIndex >= 0 &&
+                       panCoeffIndex < m_shared_data->pan_coefficients[0].size());
+                // panCoeffIndex =
+                // xenakios::jlimit<int>(0,(int)m_shared_data->pan_coefficients[0].size()-1,panCoeffIndex);
+
+                float leftGain = m_shared_data->pan_coefficients[0][panCoeffIndex];
+                float rightGain = m_shared_data->pan_coefficients[1][panCoeffIndex];
+                float po = partial_outputs[i] * interp_gain;
+                outputs[1] += po * rightGain;
+                outputs[0] += po * leftGain;
+            }
+            else
+                m_partial_amplitudes[i] = 0.0f; // for visualization
+
+            float phase = m_partial_phases[i];
+            phase += m_partial_phaseincs[i];
+            if (phase >= M_PI * 2)
+                phase -= M_PI * 2;
+            m_partial_phases[i] = phase;
+        }
+
+        m_adsr_burst_mix = 0.0f;
+        float finalgain = (1.0 - m_adsr_burst_mix) * envgain + m_adsr_burst_mix * burst_eg;
+        finalgain *= volmodgain;
+        // might want to visualize velocity too, but let's not, for now
+        m_adsr_vis_amp = finalgain;
+        // output_frame[0] = output*envgain*m_cur_velo*m_pan;
+        // output_frame[1] = output*envgain*m_cur_velo*(1.0-m_pan);
+        // float send_gain = m_aux_send_a + lfo_destinations[AdditiveSharedData::MOT_AUX_SEND_A];
+        // send_gain = xenakios::jlimit(0.0f, 1.0f, send_gain);
+        // send_gain = -48.0f + 48.0f * send_gain;
+        // send_gain = xenakios::decibelsToGain(send_gain);
+
+        destBuf.getSample(0, outbufpos) +=
+            outputs[0] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
+        destBuf.getSample(1, outbufpos) +=
+            outputs[1] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
+        // output_frame[0] = outputs[0] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
+        // output_frame[1] = outputs[1] * m_cur_velo_gain * finalgain * m_partial_gain_compen;
+        // output_frame[2] = output_frame[0] * send_gain;
+        // output_frame[3] = output_frame[1] * send_gain;
+        // deactivate voice when ADSR finished
+        if (m_eg0->stage == VoiceEG::s_eoc)
+        {
+            m_is_available = true;
+        }
+        ++surge_lfo_update_counter;
+        if (surge_lfo_update_counter == SRProvider::BLOCK_SIZE)
+            surge_lfo_update_counter = 0;
     }
-#ifdef KAS_BLOCK_VOICE_TEST
-    output_frame[0] = block_output[0][voice_step_update_counter];
-    output_frame[1] = block_output[1][voice_step_update_counter];
-    output_frame[2] = 0.0f;
-    output_frame[3] = 0.0f;
-    ++voice_step_update_counter;
-    if (voice_step_update_counter == voicestepgranul)
-        voice_step_update_counter = 0;
-#endif
 }
 
 #pragma float_control(pop)
@@ -1002,12 +949,7 @@ void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
     {
         if (!v.m_is_available)
         {
-            for (int i = 0; i < destBuf.getNumFrames(); ++i)
-            {
-                v.step();
-                mixbufView.getSample(0, i) += v.output_frame[0];
-                mixbufView.getSample(1, i) += v.output_frame[1];
-            }
+            v.process(mixbufView);
         }
     }
     for (int i = 0; i < mixbufView.getNumFrames(); ++i)
@@ -1262,7 +1204,7 @@ float BurstGenerator::process()
 float BurstGenerator::getBurstTime(int index)
 {
     float tposnorm = 1.0 / m_num_bursts * index;
-    tposnorm = juce::jlimit(0.0f, 1.0f, tposnorm);
+    tposnorm = xenakios::jlimit(0.0f, 1.0f, tposnorm);
     if (m_distrib < 0.5)
     {
         double raise_to = xenakios::mapvalue(m_distrib, 0.0, 0.5, 3.0, 1.0);
