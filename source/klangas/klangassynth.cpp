@@ -151,6 +151,16 @@ struct xen_klangas : public clap::helpers::Plugin<clap::helpers::MisbehaviourHan
                                         .withName("Filter morph")
                                         .withID((clap_id)0));
         paramValues.push_back(paramDescriptions.back().defaultVal);
+        paramDescriptions.push_back(ParamDesc()
+                                        .withLinearScaleFormatting("%")
+                                        .withRange(0.0, 1.0)
+                                        .withDefault(0.5)
+                                        .withFlags(CLAP_PARAM_IS_AUTOMATABLE |
+                                                   CLAP_PARAM_IS_MODULATABLE |
+                                                   CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID)
+                                        .withName("Pan")
+                                        .withID((clap_id)1));
+        paramValues.push_back(paramDescriptions.back().defaultVal);
     }
     void onMainThread() noexcept override {}
     bool activate(double sampleRate_, uint32_t minFrameCount,
@@ -373,13 +383,13 @@ struct xen_klangas : public clap::helpers::Plugin<clap::helpers::MisbehaviourHan
             v.setADSRParameters(0, 0.2, 0.6, 0.5, 0.7);
             v.setADSRParameters(1, 0.2, 0.2, 0.5, 0.2);
             v.m_freq_tweaks_mode = 0;
-            v.m_freq_tweaks_mix = 0.1;
+            v.m_freq_tweaks_mix = 0.0;
             v.m_adsr_burst_mix = 0.0;
             v.m_base_volume = -9.0;
             v.m_filter_morph = paramValues[0];
             v.m_filter_mode = 2;
             v.setPartialsBalance(1.0);
-            v.setPartialsPanMorph(0.1);
+            v.setPartialsPanMorph(0.0);
         }
         while (pos < frameCount)
         {

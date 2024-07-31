@@ -1032,6 +1032,8 @@ void AdditiveSynth::handleParameterValue(int port, int ch, int key, int note_id,
         {
             if (parid == 0)
                 v.m_filter_morph = value;
+            if (parid == 1)
+                v.setPan(value);
         }
     }
 }
