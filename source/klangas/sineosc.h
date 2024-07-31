@@ -375,8 +375,8 @@ class AdditiveVoice
 
     std::optional<SimpleLFO> surge_lfo[4];
 
-    int surge_lfo_update_counter = 0;
-    int voice_step_update_counter = 0;
+    int state_update_counter = 0;
+    
 };
 
 class AdditiveSynth

@@ -651,7 +651,7 @@ void AdditiveVoice::updateState()
 
 void AdditiveVoice::beginNote(int port_index, int channel, int key, int noteid, double velo)
 {
-    surge_lfo_update_counter = 0;
+    state_update_counter = 0;
     m_cur_midi_note = key;
     m_note_id = noteid;
     m_note_channel = channel;
@@ -708,7 +708,7 @@ void AdditiveVoice::process(choc::buffer::ChannelArrayView<float> destBuf)
     {
         for (int i = 0; i < AdditiveSharedData::MOT_LAST; ++i)
             lfo_destinations[i] = 0.0f;
-        if (surge_lfo_update_counter == 0)
+        if (state_update_counter == 0)
         {
             m_eg0->processBlock(m_eg0_params.a, m_eg0_params.d, m_eg0_params.s, m_eg0_params.r, 1,
                                 1, 1, m_eg_gate);
@@ -728,14 +728,14 @@ void AdditiveVoice::process(choc::buffer::ChannelArrayView<float> destBuf)
 
         for (int i = 0; i < 4; ++i)
         {
-            modulator_outs[i] = surge_lfo[i]->outputBlock[surge_lfo_update_counter];
+            modulator_outs[i] = surge_lfo[i]->outputBlock[state_update_counter];
             if (modulator_unipolar[i])
                 modulator_outs[i] = 1.0f + modulator_outs[i];
         }
 
-        float envgain = m_eg0->outputCache[surge_lfo_update_counter];
+        float envgain = m_eg0->outputCache[state_update_counter];
         modulator_outs[AdditiveSharedData::MOS_EG0] = envgain - m_adsr_sustain_level;
-        float auxegval = m_eg1->outputCache[surge_lfo_update_counter];
+        float auxegval = m_eg1->outputCache[state_update_counter];
         modulator_outs[AdditiveSharedData::MOS_EG1] = auxegval;
         float burst_eg = 0.0; // m_burst_gen->process();
         modulator_outs[AdditiveSharedData::MOS_BURST] = burst_eg;
@@ -771,7 +771,7 @@ void AdditiveVoice::process(choc::buffer::ChannelArrayView<float> destBuf)
         m_volume_lfo_mod = 24.0 * lfo_destinations[AdditiveSharedData::MOT_VOLUME];
         m_volume_lfo_mod = std::clamp(m_volume_lfo_mod + m_base_volume, -96.0f, 0.0f);
         float volmodgain = xenakios::decibelsToGain(m_volume_lfo_mod);
-        if (surge_lfo_update_counter == 0)
+        if (state_update_counter == 0)
         {
             // let's see how this goes...
             updateState();
@@ -906,9 +906,9 @@ void AdditiveVoice::process(choc::buffer::ChannelArrayView<float> destBuf)
         {
             m_is_available = true;
         }
-        ++surge_lfo_update_counter;
-        if (surge_lfo_update_counter == SRProvider::BLOCK_SIZE)
-            surge_lfo_update_counter = 0;
+        ++state_update_counter;
+        if (state_update_counter == SRProvider::BLOCK_SIZE)
+            state_update_counter = 0;
     }
 }
 
