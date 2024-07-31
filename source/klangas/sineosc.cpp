@@ -648,10 +648,14 @@ void AdditiveVoice::updateState()
     // m_frequencies_ready_to_show = true;
 }
 #pragma float_control(pop)
+
 void AdditiveVoice::beginNote(int port_index, int channel, int key, int noteid, double velo)
 {
     surge_lfo_update_counter = 0;
     m_cur_midi_note = key;
+    m_note_id = noteid;
+    m_note_channel = channel;
+    m_note_port = port_index;
     velo = xenakios::mapvalue<float>(velo, 0.0f, 1.0f, m_vel_respo, 0.0f);
     m_cur_velo_gain = xenakios::decibelsToGain(velo);
     m_eg_gate = true;
@@ -1017,6 +1021,20 @@ void AdditiveSynth::processBlock(choc::buffer::ChannelArrayView<float> destBuf)
 }
 
 void AdditiveSynth::setPitchBendRange(double range) { m_pitch_bend_range = range; }
+
+void AdditiveSynth::handleParameterValue(int port, int ch, int key, int note_id, clap_id parid,
+                                         double value)
+{
+    for (auto &v : m_voices)
+    {
+        if ((key == -1 || v.m_cur_midi_note == key) && (note_id == -1 || v.m_note_id == note_id) &&
+            (port == -1 || v.m_note_port == port) && (ch == -1 || v.m_note_channel == ch))
+        {
+            if (parid == 0)
+                v.m_filter_morph = value;
+        }
+    }
+}
 
 void AdditiveSynth::handlePolyAfterTouch(int port_index, int channel, int note, float value)
 {

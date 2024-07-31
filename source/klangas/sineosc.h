@@ -300,6 +300,9 @@ class AdditiveVoice
         pars->r = r;
         m_adsr_sustain_level = s;
     }
+    int m_note_id = -1;
+    int m_note_channel = 0;
+    int m_note_port = 0;
     float m_vel_respo = -48.0f;
     float m_base_volume = -6.0f;
     float m_adsr_sustain_level = 1.0f;
@@ -408,6 +411,8 @@ class AdditiveSynth
     void handleCC(int port_index, int channel, int cc, int value);
     void handlePitchBend(int port_index, int channel, float value);
     void handlePolyAfterTouch(int port_index, int channel, int note, float value);
+    void handleParameterValue(int port_index, int channel, int key, int note_id, clap_id parid,
+                              double value);
 
   private:
     choc::buffer::ChannelArrayBuffer<float> m_mixbuf;
