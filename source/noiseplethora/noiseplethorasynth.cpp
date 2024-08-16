@@ -594,10 +594,10 @@ struct xen_noise_plethora
         memset(buf, 0, bufsize);
         while (true)
         {
-            int read = stream->read(stream, buf, bufsize);
+            auto read = stream->read(stream, buf, bufsize);
             if (read == 0)
                 break;
-            if (read == -1)
+            if (read < 0)
                 return false;
             for (size_t i = 0; i < read; ++i)
                 json.push_back(buf[i]);
