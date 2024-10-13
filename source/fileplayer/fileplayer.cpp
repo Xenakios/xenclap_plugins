@@ -12,7 +12,8 @@
 #include "audio/choc_AudioFileFormat_FLAC.h"
 #include "audio/choc_AudioFileFormat_MP3.h"
 #include "audio/choc_AudioFileFormat_Ogg.h"
-#include "xap_utils.h"
+#include "../xap_utils.h"
+#include <filesystem>
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 
@@ -46,7 +47,6 @@ struct Grain
         if (m_output_playpos >= m_duration_samples / 2)
             ogain = xenakios::mapvalue<float>(m_output_playpos, m_duration_samples / 2,
                                               m_duration_samples, 1.0, 0.0);
-        
     }
 };
 
@@ -162,9 +162,11 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
     sst::basic_blocks::dsp::LanczosResampler<128> m_lanczos{44100.0f, 44100.0f};
     signalsmith::stretch::SignalsmithStretch<float> m_stretch;
     GrainEngine m_grain_eng;
-    void loadAudioFile(std::string path)
+    void loadAudioFile(std::filesystem::path path)
     {
-        auto reader = fmtList.createReader(path);
+        if (path.extension() != ".wav")
+            return;
+        auto reader = fmtList.createReader(path.string());
         if (reader)
         {
             auto props = reader->getProperties();
