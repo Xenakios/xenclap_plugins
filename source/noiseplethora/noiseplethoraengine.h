@@ -355,10 +355,18 @@ class NoisePlethoraSynth
 {
   public:
     using voice_t = NoisePlethoraVoice;
+    struct ConcreteMonoResp
+    {
+        void setMIDIPitchBend(int16_t channel, int16_t pb14bit) {}
+        void setMIDI1CC(int16_t channel, int16_t cc, int16_t val) {}
+        void setMIDIChannelPressure(int16_t channel, int16_t pres) {}
+    };
+    ConcreteMonoResp monoResponder;
     static constexpr size_t maxVoiceCount = 32;
-    sst::voicemanager::VoiceManager<NoisePlethoraSynth, NoisePlethoraSynth> m_voice_manager;
+    sst::voicemanager::VoiceManager<NoisePlethoraSynth, NoisePlethoraSynth, ConcreteMonoResp>
+        m_voice_manager;
 
-    NoisePlethoraSynth() : m_voice_manager(*this)
+    NoisePlethoraSynth() : m_voice_manager(*this, monoResponder)
     {
         deactivatedNotes.reserve(1024);
         for (size_t i = 0; i < maxVoiceCount; ++i)
