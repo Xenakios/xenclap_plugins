@@ -59,17 +59,6 @@ set(products_folder ${CMAKE_BINARY_DIR})
 
 add_library(noiseplethora
     source/noiseplethora/noise-plethora/random.cpp
-    # source/noise-plethora/teensy/effect_freeverb.cpp
-    # source/noise-plethora/teensy/effect_bitcrusher.cpp
-    # source/noise-plethora/teensy/effect_granular.cpp
-    # source/noise-plethora/teensy/effect_combine.cpp
-    # source/noise-plethora/teensy/effect_multiply.cpp
-    # source/noise-plethora/teensy/effect_flange.cpp
-    # source/noise-plethora/teensy/effect_wavefolder.cpp
-    # source/noise-plethora/teensy/filter_variable.cpp
-    # source/noise-plethora/teensy/synth_pwm.cpp
-    # source/noise-plethora/teensy/synth_pinknoise.cpp
-    # source/noise-plethora/teensy/synth_whitenoise.cpp
     source/noiseplethora/noise-plethora/plugins/Banks.cpp
     
 )
