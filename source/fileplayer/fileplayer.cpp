@@ -343,7 +343,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         float *op[2];
         op[0] = &process->audio_outputs->data32[0][0];
         op[1] = &process->audio_outputs->data32[1][0];
-        
+
         auto inEvents = process->in_events;
         auto inEventsSize = inEvents->size(inEvents);
         for (int i = 0; i < inEventsSize; ++i)
@@ -512,6 +512,13 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
             m_buf_playpos_float += (rate * process->frames_count) * sampleAdvance;
             m_stretch.process(workBuffer.getView().data.channels, samplestopush,
                               process->audio_outputs[0].data32, process->frames_count);
+        }
+        double voldb = *idToParPtrMap[(clap_id)ParamIDs::Volume];
+        double gain = xenakios::decibelsToGain(voldb);
+        for (int i = 0; i < frameCount; ++i)
+        {
+            op[0][i] *= gain;
+            op[1][i] *= gain;
         }
         return CLAP_PROCESS_CONTINUE;
     }
