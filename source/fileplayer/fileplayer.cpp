@@ -165,11 +165,17 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
     void loadAudioFile(std::filesystem::path path)
     {
         if (path.extension() != ".wav")
+        {
+            std::cout << "file extension not supported for " << path.string() << "\n";
             return;
+        }
+
         auto reader = fmtList.createReader(path.string());
         if (reader)
         {
             auto props = reader->getProperties();
+            std::cout << std::format("{} {} channels, {} Hz\n", path.string(), props.numChannels,
+                                     props.sampleRate);
             choc::buffer::ChannelArrayBuffer<float> readbuf(
                 choc::buffer::Size(props.numChannels, props.numFrames));
             if (reader->readFrames(0, readbuf.getView()))
@@ -181,13 +187,15 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                 m_grain_eng.setBuffer(fileBuffer.getView(), props.sampleRate, 0.0, 1.0);
             }
         }
+        else
+            std::cout << "could not create reader for " << path.string() << "\n";
     }
     xen_fileplayer(const clap_host *host, const clap_plugin_descriptor *desc)
         : clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                 clap::helpers::CheckingLevel::Maximal>(desc, host)
     {
         fmtList.addFormat(std::make_unique<choc::audio::WAVAudioFileFormat<false>>());
-        loadAudioFile(R"(C:\MusicAudio\sourcesamples\count.wav)");
+        // loadAudioFile(R"(C:\MusicAudio\sourcesamples\_count.wav)");
         paramDescs.push_back(ParamDesc()
                                  .asDecibel()
                                  .withRange(-48.0, 6.0)
@@ -335,15 +343,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         float *op[2];
         op[0] = &process->audio_outputs->data32[0][0];
         op[1] = &process->audio_outputs->data32[1][0];
-        if (fileProps.numChannels == 0)
-        {
-            for (int i = 0; i < frameCount; ++i)
-            {
-                op[0][i] = 0.0f;
-                op[1][i] = 0.0f;
-            }
-            return CLAP_PROCESS_CONTINUE;
-        }
+        
         auto inEvents = process->in_events;
         auto inEventsSize = inEvents->size(inEvents);
         for (int i = 0; i < inEventsSize; ++i)
@@ -361,6 +361,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
             if (ev->type == XENAKIOS_STRING_MSG)
             {
                 auto strev = (clap_event_xen_string *)ev;
+                std::cout << "got string event " << strev->str << "\n";
                 if (strev->target == 0 && strev->str != nullptr)
                 {
                     // obviously, can't do this really, but for testing now...
@@ -368,6 +369,15 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                     loadAudioFile(filename);
                 }
             }
+        }
+        if (fileProps.numChannels == 0)
+        {
+            for (int i = 0; i < frameCount; ++i)
+            {
+                op[0][i] = 0.0f;
+                op[1][i] = 0.0f;
+            }
+            return CLAP_PROCESS_CONTINUE;
         }
         double m_loop_start = *idToParPtrMap[(clap_id)ParamIDs::LoopStart];
         double m_loop_end = *idToParPtrMap[(clap_id)ParamIDs::LoopEnd];
