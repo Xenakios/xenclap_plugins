@@ -14,6 +14,7 @@
 #include "audio/choc_AudioFileFormat_Ogg.h"
 #include "../xap_utils.h"
 #include <filesystem>
+#include "clap/ext/draft/param-origin.h"
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 
@@ -190,10 +191,29 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         else
             std::cout << "could not create reader for " << path.string() << "\n";
     }
+    clap_plugin_param_origin ext_parameter_origin;
+    const void *extension(const char *id) noexcept override
+    {
+        if (!strcmp(id, CLAP_EXT_PARAM_ORIGIN))
+        {
+            return &ext_parameter_origin;
+        }
+        return nullptr;
+    }
     xen_fileplayer(const clap_host *host, const clap_plugin_descriptor *desc)
         : clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                 clap::helpers::CheckingLevel::Maximal>(desc, host)
     {
+        // bool(CLAP_ABI *get)(const clap_plugin_t *plugin, clap_id param_id, double *out_value);
+        ext_parameter_origin.get = [](const clap_plugin_t *plugin, clap_id param_id,
+                                      double *out_value) {
+            if (param_id == (clap_id)ParamIDs::Pitch)
+            {
+                *out_value = 0.0;
+                return true;
+            }
+            return false;
+        };
         fmtList.addFormat(std::make_unique<choc::audio::WAVAudioFileFormat<false>>());
         // loadAudioFile(R"(C:\MusicAudio\sourcesamples\_count.wav)");
         paramDescs.push_back(ParamDesc()
@@ -402,7 +422,6 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
 
         // time octaves
         double rate = *idToParPtrMap[(clap_id)ParamIDs::Playrate];
-
         double m_rate_mod = 0.0;
         rate += m_rate_mod;
         // we could allow modulation to make it go a bit over these limits...
