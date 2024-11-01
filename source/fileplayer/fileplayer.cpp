@@ -14,6 +14,7 @@
 #include "audio/choc_AudioFileFormat_Ogg.h"
 #include "../xap_utils.h"
 #include <filesystem>
+#include <unordered_map>
 #include "clap/ext/draft/param-origin.h"
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
@@ -200,6 +201,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         }
         return nullptr;
     }
+    std::unordered_map<clap_id, double> paramOrigins;
     xen_fileplayer(const clap_host *host, const clap_plugin_descriptor *desc)
         : clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                 clap::helpers::CheckingLevel::Maximal>(desc, host)
@@ -207,15 +209,17 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         // bool(CLAP_ABI *get)(const clap_plugin_t *plugin, clap_id param_id, double *out_value);
         ext_parameter_origin.get = [](const clap_plugin_t *plugin, clap_id param_id,
                                       double *out_value) {
-            if (param_id == (clap_id)ParamIDs::Pitch)
+            auto myplugin = (xen_fileplayer *)plugin->plugin_data;
+            auto it = myplugin->paramOrigins.find(param_id);
+            if (it != myplugin->paramOrigins.end())
             {
-                *out_value = 0.0;
+                *out_value = it->second;
                 return true;
             }
             return false;
         };
         fmtList.addFormat(std::make_unique<choc::audio::WAVAudioFileFormat<false>>());
-        // loadAudioFile(R"(C:\MusicAudio\sourcesamples\_count.wav)");
+        loadAudioFile(R"(C:\MusicAudio\sourcesamples\_count.wav)");
         paramDescs.push_back(ParamDesc()
                                  .asDecibel()
                                  .withRange(-48.0, 6.0)
@@ -223,6 +227,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withName("Volume")
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE)
                                  .withID((clap_id)ParamIDs::Volume));
+        paramOrigins[(clap_id)ParamIDs::Volume] = 0.0;
         paramDescs.push_back(
             ParamDesc()
                 .withUnorderedMapFormatting({{0, "Resample"}, {1, "Spectral"}, {2, "Granular"}},
@@ -242,6 +247,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Playrate")
                                  .withID((clap_id)ParamIDs::Playrate));
+        paramOrigins[(clap_id)ParamIDs::Playrate] = 0.0;
         paramDescs.push_back(ParamDesc()
                                  .asFloat()
                                  .withRange(-24.0f, 24.0f)
@@ -250,6 +256,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Pitch")
                                  .withID((clap_id)ParamIDs::Pitch));
+        paramOrigins[(clap_id)ParamIDs::Pitch] = 0.0;
         paramDescs.push_back(ParamDesc()
                                  .asFloat()
                                  .withRange(0.0f, 1.0f)
@@ -258,6 +265,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Loop start")
                                  .withID((clap_id)ParamIDs::LoopStart));
+        paramOrigins[(clap_id)ParamIDs::LoopStart] = 0.0;
         paramDescs.push_back(ParamDesc()
                                  .asFloat()
                                  .withRange(0.0f, 1.0f)
@@ -266,6 +274,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Loop end")
                                  .withID((clap_id)ParamIDs::LoopEnd));
+        paramOrigins[(clap_id)ParamIDs::LoopEnd] = 1.0;
         paramDescs.push_back(ParamDesc()
                                  .asBool()
                                  .withDefault(0.0)
