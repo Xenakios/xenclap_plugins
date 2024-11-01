@@ -253,6 +253,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withRange(-24.0f, 24.0f)
                                  .withDefault(0.0)
                                  .withDecimalPlaces(3)
+                                 .withLinearScaleFormatting("semitones")
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Pitch")
                                  .withID((clap_id)ParamIDs::Pitch));
@@ -262,6 +263,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withRange(0.0f, 1.0f)
                                  .withDefault(0.0)
                                  .withDecimalPlaces(3)
+                                 .withLinearScaleFormatting("%")
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Loop start")
                                  .withID((clap_id)ParamIDs::LoopStart));
@@ -271,6 +273,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
                                  .withRange(0.0f, 1.0f)
                                  .withDefault(1.0)
                                  .withDecimalPlaces(3)
+                                 .withLinearScaleFormatting("%")
                                  .withFlags(CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE)
                                  .withName("Loop end")
                                  .withID((clap_id)ParamIDs::LoopEnd));
