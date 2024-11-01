@@ -378,7 +378,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
 
         auto inEvents = process->in_events;
         auto inEventsSize = inEvents->size(inEvents);
-        auto curPlayMode = *idToParPtrMap[(clap_id)ParamIDs::StretchMode];
+        
         for (int i = 0; i < inEventsSize; ++i)
         {
             auto ev = inEvents->get(inEvents, i);
@@ -431,6 +431,10 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
             m_buf_playpos = loop_start_samples;
         if (m_buf_playpos >= loop_end_samples)
             m_buf_playpos = loop_start_samples;
+        if (std::abs(m_buf_playpos - m_buf_playpos_float) > 1.0)
+        {
+            m_buf_playpos_float = m_buf_playpos;
+        }
         float compensrate = fileProps.sampleRate / outSr;
 
         // time octaves
@@ -462,10 +466,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         int numinchans = fileProps.numChannels;
 
         int playmode = *idToParPtrMap[(clap_id)ParamIDs::StretchMode];
-        if ((int)curPlayMode != playmode && playmode == 1)
-        {
-            m_buf_playpos_float = m_buf_playpos;
-        }
+        
         int sampleAdvance = 1;
         if (*idToParPtrMap[(clap_id)ParamIDs::Reverse] >= 0.5)
             sampleAdvance = -1;
