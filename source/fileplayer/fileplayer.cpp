@@ -378,7 +378,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
 
         auto inEvents = process->in_events;
         auto inEventsSize = inEvents->size(inEvents);
-        
+
         for (int i = 0; i < inEventsSize; ++i)
         {
             auto ev = inEvents->get(inEvents, i);
@@ -466,7 +466,7 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
         int numinchans = fileProps.numChannels;
 
         int playmode = *idToParPtrMap[(clap_id)ParamIDs::StretchMode];
-        
+
         int sampleAdvance = 1;
         if (*idToParPtrMap[(clap_id)ParamIDs::Reverse] >= 0.5)
             sampleAdvance = -1;
@@ -531,8 +531,9 @@ struct xen_fileplayer : public clap::helpers::Plugin<clap::helpers::Misbehaviour
             m_stretch.setTransposeFactor(pitchratio * compensrate);
             rate *= compensrate;
             int adjust = m_buf_playpos_float - m_buf_playpos;
-            assert(adjust >= 0);
+
             int samplestopush = rate * (process->frames_count + adjust);
+            assert(samplestopush > 0 && samplestopush < process->frames_count * 32);
             // int samplestopush = process->frames_count * rate;
             for (int i = 0; i < samplestopush; ++i)
             {

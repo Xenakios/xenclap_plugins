@@ -19,8 +19,8 @@ include_directories(
 project(xenclapplugins)
 
 add_subdirectory(libs/fmt)
-set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES TRUE CACHE BOOL "Get em")
-add_subdirectory(libs/clap-wrapper)
+# set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES TRUE CACHE BOOL "Get em")
+# add_subdirectory(libs/clap-wrapper)
 
 # set(VST3_TARGET noise_plethora_vst3)
 # add_library(${VST3_TARGET} MODULE)

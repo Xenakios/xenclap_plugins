@@ -12,7 +12,11 @@
 #include "text/choc_Files.h"
 #include "../xap_utils.h"
 #include "../xapdsp.h"
+// #define USE_SST_VM
+
+#ifdef USE_SST_VM
 #include "sst/voicemanager/voicemanager.h"
+#endif
 
 class SignalSmoother
 {
@@ -174,7 +178,10 @@ class NoisePlethoraVoice
         // theoretically possible was started with key -1, although no longer endorsed by Clap
         if (key == -1)
             return;
-
+        updateKeyTrackMods(key);
+    }
+    void updateKeyTrackMods(float key)
+    {
         if (keytrackMode == 1 || keytrackMode == 2)
         {
             // calculate x and y mods from key, using a Lissajous style mapping
@@ -194,7 +201,7 @@ class NoisePlethoraVoice
             const int gsizes[3] = {3, 5, 7};
             int gsize = gsizes[keytrackMode - 3];
             int numcells = gsize * gsize;
-            int modkey = key % numcells;
+            int modkey = (int)key % numcells;
             int ix = modkey % gsize;
             int iy = modkey / gsize;
             keytrack_x_mod = xenakios::mapvalue<float>(ix, 0, gsize - 1, -0.5f, 0.5f);
@@ -208,6 +215,7 @@ class NoisePlethoraVoice
     float eg_sustain = 0.75f;
     float eg_release = 0.5f;
     int keytrackMode = 0;
+    bool isTheMonoVoice = false;
     int filterCount = 1;
     std::function<void(int, int, int, int)> DeativatedVoiceCallback;
     float totalx = 0.0f;
@@ -355,6 +363,8 @@ class NoisePlethoraSynth
 {
   public:
     using voice_t = NoisePlethoraVoice;
+    static constexpr size_t maxVoiceCount = 32;
+#ifdef USE_SST_VM
     struct ConcreteMonoResp
     {
         void setMIDIPitchBend(int16_t channel, int16_t pb14bit) {}
@@ -362,11 +372,14 @@ class NoisePlethoraSynth
         void setMIDIChannelPressure(int16_t channel, int16_t pres) {}
     };
     ConcreteMonoResp monoResponder;
-    static constexpr size_t maxVoiceCount = 32;
+
     sst::voicemanager::VoiceManager<NoisePlethoraSynth, NoisePlethoraSynth, ConcreteMonoResp>
         m_voice_manager;
 
     NoisePlethoraSynth() : m_voice_manager(*this, monoResponder)
+#else
+    NoisePlethoraSynth()
+#endif
     {
         deactivatedNotes.reserve(1024);
         for (size_t i = 0; i < maxVoiceCount; ++i)
@@ -436,6 +449,24 @@ class NoisePlethoraSynth
     void applyParameter(int port, int ch, int key, int note_id, clap_id parid, double value)
     {
         // std::cout << "par " << parid << " " << value << "\n";
+        if (parid == (clap_id)ParamIDs::PolyphonyMode)
+        {
+            if (!monoMode && (bool)value)
+            {
+                for (auto &v : m_voices)
+                {
+                    v->deactivate();
+                }
+                m_voices.front()->isTheMonoVoice = true;
+            }
+            monoMode = value;
+            if (!monoMode)
+            {
+                m_voices.front()->deactivate();
+                m_voices.front()->isTheMonoVoice = false;
+            }
+            return;
+        }
         for (auto &v : m_voices)
         {
             if ((key == -1 || v->key == key) && (note_id == -1 || v->note_id == note_id) &&
@@ -476,9 +507,16 @@ class NoisePlethoraSynth
         }
     }
     std::vector<std::tuple<int, int, int, int>> deactivatedNotes;
+    bool monoMode = false;
     int voicecount = 0;
     void startNote(int port, int ch, int key, int note_id, double velo)
     {
+        if (monoMode)
+        {
+            ++voicecount;
+            m_voices[0]->activate(port, ch, key, note_id, velo);
+            return;
+        }
         for (auto &v : m_voices)
         {
             if (!v->m_voice_active)
@@ -537,7 +575,8 @@ class NoisePlethoraSynth
         EGSustain,
         EGRelease,
         KeyTrackMode,
-        FilterCount
+        FilterCount,
+        PolyphonyMode
     };
     int m_polyphony = 1;
     double m_pan_spread = 0.0;
