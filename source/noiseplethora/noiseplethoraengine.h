@@ -513,8 +513,11 @@ class NoisePlethoraSynth
     {
         if (monoMode)
         {
-            ++voicecount;
-            m_voices[0]->activate(port, ch, key, note_id, velo);
+            //if (!m_voices.front()->m_voice_active)
+            {
+                ++voicecount;
+                m_voices[0]->activate(port, ch, key, note_id, velo);
+            }
             return;
         }
         for (auto &v : m_voices)
@@ -531,6 +534,14 @@ class NoisePlethoraSynth
     }
     void stopNote(int port, int ch, int key, int note_id, double velo)
     {
+        if (monoMode)
+        {
+            if (m_voices.front()->m_voice_active)
+            {
+                
+            }
+            return;
+        }
         for (auto &v : m_voices)
         {
             if (v->port_id == port && v->chan == ch && v->key == key &&
