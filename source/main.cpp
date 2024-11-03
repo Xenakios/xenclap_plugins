@@ -1,6 +1,8 @@
 #include <iostream>
+#include <memory>
 #include "klangas/sineosc.h"
 #include "audio/choc_AudioFileFormat_WAV.h"
+#include "noiseplethora/noiseplethoraengine.h"
 
 inline void test_klangas()
 {
@@ -33,7 +35,7 @@ inline void test_klangas()
     filterEnv.addPoint({0.0, 1.0});
     filterEnv.addPoint({5.0, 0.2});
     filterEnv.addPoint({10.0, 1.0});
-    
+
     while (outcount < outlen)
     {
         double secpos = outcount / sr;
@@ -61,8 +63,44 @@ inline void test_klangas()
     }
 }
 
-int main() 
-{ 
-    test_klangas(); 
+inline void test_noise_plethora_monomode()
+{
+    double sr = 44100.0;
+    unsigned int bufsize = 256;
+    choc::audio::AudioFileProperties props;
+    props.bitDepth = choc::audio::BitDepth::float32;
+    props.numChannels = 2;
+    props.formatName = "WAV";
+    props.sampleRate = sr;
+    choc::audio::WAVAudioFileFormat<true> wavformat;
+    auto writer =
+        wavformat.createWriter("C:/develop/xen_clap_plugins/noiseplethora_mono01.wav", props);
+    choc::buffer::ChannelArrayBuffer<float> procbuf{2, bufsize};
+    procbuf.clear();
+    auto nps = std::make_unique<NoisePlethoraSynth>();
+    nps->prepare(sr, bufsize);
+    nps->applyParameter(0, 0, -1, -1, (clap_id)NoisePlethoraSynth::ParamIDs::PolyphonyMode, 1.0);
+    // nps->applyParameter(0, 0, -1, -1, (clap_id)NoisePlethoraSynth::ParamIDs::PolyphonyMode, 0.0);
+    nps->startNote(0, 0, 60, -1, 1.0);
+    int outlen = 44100 * 5;
+    int outcount = 0;
+    int note_endpos = 4 * 44100;
+    while (outcount < outlen)
+    {
+        if (note_endpos >= outcount  && note_endpos < (outcount + bufsize) )
+        {
+            nps->stopNote(0, 0, 60, -1, 0.0);
+            std::cout << "stopped note\n";
+        }
+        nps->processBlock(procbuf.getView());
+        writer->appendFrames(procbuf.getView());
+        outcount += bufsize;
+    }
+}
+
+int main()
+{
+    test_noise_plethora_monomode();
+    // test_klangas();
     std::cout << "finished\n";
 }

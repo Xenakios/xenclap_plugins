@@ -12,6 +12,7 @@
 #include "audio/choc_SampleBuffers.h"
 #include <mutex>
 #include "sst/basic-blocks/dsp/FollowSlewAndSmooth.h"
+#include "../common.h"
 
 namespace xenakios
 {
@@ -19,7 +20,7 @@ template <typename T> inline T jlimit(T minval, T maxval, T val)
 {
     return std::clamp(val, minval, maxval);
 }
-} // namespace juce
+} // namespace xenakios
 
 struct SRProvider
 {
@@ -201,24 +202,6 @@ class BurstGenerator
     VoiceEG env;
 };
 
-class SignalSmoother
-{
-  public:
-    SignalSmoother() {}
-    inline double process(double in)
-    {
-        double result = in + m_slope * (m_history - in);
-        m_history = result;
-        return result;
-    }
-    void setSlope(double x) { m_slope = x; }
-    double getSlope() const { return m_slope; }
-
-  private:
-    float m_history = 0.0f;
-    float m_slope = 0.999f;
-};
-
 class AdditiveVoice
 {
   public:
@@ -376,7 +359,6 @@ class AdditiveVoice
     std::optional<SimpleLFO> surge_lfo[4];
 
     int state_update_counter = 0;
-    
 };
 
 class AdditiveSynth

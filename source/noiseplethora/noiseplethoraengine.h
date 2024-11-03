@@ -12,30 +12,13 @@
 #include "text/choc_Files.h"
 #include "../xap_utils.h"
 #include "../xapdsp.h"
+#include "../common.h"
 // #define USE_SST_VM
 
 #ifdef USE_SST_VM
 #include "sst/voicemanager/voicemanager.h"
 #endif
 
-class SignalSmoother
-{
-  public:
-    SignalSmoother() {}
-    inline double process(double in)
-    {
-        double result = in + m_slope * (m_history - in);
-        m_history = result;
-        return result;
-    }
-    void setSlope(double x) { m_slope = x; }
-    double getSlope() const { return m_slope; }
-    void setValueImmediate(double x) { m_history = x; }
-
-  private:
-    float m_history = 0.0f;
-    float m_slope = 0.999f;
-};
 
 constexpr size_t ENVBLOCKSIZE = 64;
 
@@ -458,12 +441,14 @@ class NoisePlethoraSynth
                     v->deactivate();
                 }
                 m_voices.front()->isTheMonoVoice = true;
+                std::cout << "turned on mono mode\n";
             }
             monoMode = value;
             if (!monoMode)
             {
                 m_voices.front()->deactivate();
                 m_voices.front()->isTheMonoVoice = false;
+                std::cout << "turned on poly mode\n";
             }
             return;
         }
@@ -538,7 +523,7 @@ class NoisePlethoraSynth
         {
             if (m_voices.front()->m_voice_active)
             {
-                
+
             }
             return;
         }

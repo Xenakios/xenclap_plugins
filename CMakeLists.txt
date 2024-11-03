@@ -84,7 +84,6 @@ set(products_folder ${CMAKE_BINARY_DIR})
 add_executable(TestingProgram 
 source/klangas/sineosc.cpp
 source/main.cpp
-
 )
-
+target_link_libraries(TestingProgram PRIVATE noiseplethora fmt)
 target_compile_definitions(TestingProgram PRIVATE NOJUCE=1 _USE_MATH_DEFINES=1 __WINDOWS_WASAPI__)
