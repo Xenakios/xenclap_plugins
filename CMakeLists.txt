@@ -87,3 +87,11 @@ source/main.cpp
 )
 target_link_libraries(TestingProgram PRIVATE noiseplethora fmt)
 target_compile_definitions(TestingProgram PRIVATE NOJUCE=1 _USE_MATH_DEFINES=1 __WINDOWS_WASAPI__)
+
+add_library(GeneratedPlugin MODULE
+python/clapgen/generated.cpp
+)
+
+set_target_properties(GeneratedPlugin PROPERTIES SUFFIX ".clap" PREFIX "")
+target_compile_definitions(GeneratedPlugin PRIVATE _USE_MATH_DEFINES=1 IS_WIN=1)
+target_link_libraries(GeneratedPlugin PRIVATE fmt)
