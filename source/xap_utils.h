@@ -4,8 +4,11 @@
 #include "containers/choc_SingleReaderSingleWriterFIFO.h"
 #include "clap/clap.h"
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include "containers/choc_NonAllocatingStableSort.h"
+#include <format>
 
 #define XENAKIOS_CLAP_NAMESPACE 11111
 
@@ -22,246 +25,105 @@ template <typename T> inline clap_id to_clap_id(T x) { return static_cast<clap_i
 namespace xenakios
 {
 
-/** Remaps a value from a source range to a target range. */
+/* Remaps a value from a source range to a target range. Explodes if source range has zero size.
+ */
 template <typename Type>
 Type mapvalue(Type sourceValue, Type sourceRangeMin, Type sourceRangeMax, Type targetRangeMin,
               Type targetRangeMax)
 {
-    // jassert (! approximatelyEqual (sourceRangeMax, sourceRangeMin)); // mapping from a range of
-    // zero will produce NaN!
     return targetRangeMin + ((targetRangeMax - targetRangeMin) * (sourceValue - sourceRangeMin)) /
                                 (sourceRangeMax - sourceRangeMin);
 }
+
+/*
+ The C++ standard library random stuff can be a bit bonkers(*) at times,
+ so we have this custom class which has a decent enough random base generator
+ and some simple methods for getting values out as floats etc...
+
+(*) See for example the Microsoft implementation of std::uniform_int_distribution...
+Or the Cauchy distribution, which won't allow a scale factor of 0 to be used, while
+useful for our audio/music applications as a special case.
+*/
+
+struct Xoroshiro128Plus
+{
+    // have some non-zero init state to avoid the zero init state problem
+    // which would cause only zeros to be produced
+    uint64_t state[2] = {4294967311, 100007};
+    Xoroshiro128Plus()
+    {
+        // experimentally known that after seeding, useful to advance the state,
+        // otoh this might be optimized out by the compiler...?
+        operator()();
+    }
+    Xoroshiro128Plus(uint64_t s1, uint64_t s2) : state{s1, s2} { operator()(); }
+    void seed(uint64_t s0, uint64_t s1)
+    {
+        state[0] = s0;
+        state[1] = s1;
+        operator()();
+    }
+
+    bool isSeeded() { return state[0] || state[1]; }
+
+    static uint64_t rotl(uint64_t x, int k) { return (x << k) | (x >> (64 - k)); }
+
+    uint64_t operator()()
+    {
+        uint64_t s0 = state[0];
+        uint64_t s1 = state[1];
+        uint64_t result = s0 + s1;
+
+        s1 ^= s0;
+        state[0] = rotl(s0, 55) ^ s1 ^ (s1 << 14);
+        state[1] = rotl(s1, 36);
+
+        return result;
+    }
+    constexpr uint64_t min() const { return 0; }
+    constexpr uint64_t max() const { return UINT64_MAX; }
+    double nextFloat64() { return (*this)() * 5.421010862427522e-20; }
+    uint64_t nextUint64() { return (*this)(); }
+    uint32_t nextUint32()
+    {
+        // Take top 32 bits which has better randomness properties
+        return operator()() >> 32;
+    }
+    float nextFloat() { return nextUint32() * 2.32830629e-10f; }
+    float nextFloatInRange(float minvalue, float maxvalue)
+    {
+        return mapvalue(nextFloat(), 0.0f, 1.0f, minvalue, maxvalue);
+    }
+    double nextFloat64InRange(double minvalue, double maxvalue)
+    {
+        return mapvalue(nextFloat64(), 0.0, 1.0, minvalue, maxvalue);
+    }
+    int nextInt32InRange(int minval, int maxval)
+    {
+        assert(maxval > minval);
+        return minval + (nextUint32() % (maxval - minval));
+    }
+    double nextCauchy(double location, double scale)
+    {
+        double z = nextFloat64();
+        return location + scale * std::tan(M_PI * (z - 0.5));
+    }
+    // pretty good substitute for Gauss
+    double nextHypCos(double location, double scale)
+    {
+        // we can't do the final calculation with exactly 0.0 or 1.0, so clamp
+        // there might be some other ways to deal with this, but this shall suffice for now
+        double z = std::clamp(nextFloat64(), std::numeric_limits<double>::epsilon(),
+                              1.0 - std::numeric_limits<double>::epsilon());
+        return location + scale * (2.0 / M_PI * std::log(std::tan(M_PI / 2.0 * z)));
+    }
+};
 
 template <typename Type>
 static Type decibelsToGain(Type decibels, Type minusInfinityDb = Type(-100))
 {
     return decibels > minusInfinityDb ? std::pow(Type(10.0), decibels * Type(0.05)) : Type();
 }
-
-class EnvelopePoint
-{
-  public:
-    enum class Shape
-    {
-        Linear,
-        Hold,
-        Last
-    };
-    EnvelopePoint() {}
-    EnvelopePoint(double x, double y, Shape s = Shape::Linear, double p0 = 0.0, double p1 = 0.0)
-        : m_x(x), m_y(y), m_shape(s), m_p0(p0), m_p1(p1)
-    {
-    }
-    double getX() const { return m_x; }
-    double getY() const { return m_y; }
-    Shape getShape() const { return m_shape; }
-
-  private:
-    double m_x = 0.0;
-    double m_y = 0.0;
-    double m_p0 = 0.0;
-    double m_p1 = 0.0;
-    Shape m_shape = Shape::Linear;
-};
-
-// Simple breakpoint envelope class, modelled after the SST LFO.
-// Output is always calculated into the outputBlock array.
-// This aims to be as simple as possible, to allow composing
-// more complicated things elsewhere.
-template <size_t BLOCK_SIZE = 64> class Envelope
-{
-  public:
-    float outputBlock[BLOCK_SIZE];
-    void clearOutputBlock()
-    {
-        for (int i = 0; i < BLOCK_SIZE; ++i)
-            outputBlock[i] = 0.0f;
-    }
-    Envelope(std::optional<double> defaultPointValue = {})
-    {
-        m_points.reserve(16);
-        if (defaultPointValue)
-            addPoint({0.0, *defaultPointValue});
-        clearOutputBlock();
-    }
-    Envelope(std::vector<EnvelopePoint> points) : m_points(std::move(points))
-    {
-        sortPoints();
-        clearOutputBlock();
-    }
-    void addPoint(EnvelopePoint pt)
-    {
-        m_points.push_back(pt);
-        m_sorted = false;
-    }
-    /*
-    void addPoint(double x, double y)
-    {
-        m_points.emplace_back(x, y);
-        m_sorted = false;
-    }
-    */
-    void removeEnvelopePointAtIndex(size_t index) { m_points.erase(m_points.begin() + index); }
-    // use carefully, only when you are going to add at least one point right after this
-    void clearAllPoints()
-    {
-        m_points.clear();
-        m_sorted = false;
-    }
-    // value = normalized 0..1 position in the envelope segment
-    static double getShapedValue(double value, EnvelopePoint::Shape shape, double p0, double p1)
-    {
-        if (shape == EnvelopePoint::Shape::Linear)
-            return value;
-        // holds the value for 99% the segment length, then ramps to the next value
-        // literal sudden jump is almost never useful, but we might want to support that too...
-        if (shape == EnvelopePoint::Shape::Hold)
-        {
-            // we might want to somehow make this work based on samples/time,
-            // but percentage will have to work for now
-            if (value < 0.99)
-                return 0.0;
-            return xenakios::mapvalue(value, 0.99, 1.0, 0.0, 1.0);
-        }
-        return value;
-    }
-    size_t getNumPoints() const { return m_points.size(); }
-    // int because we want to allow negative index...
-    const EnvelopePoint &getPointSafe(int index) const
-    {
-        if (index < 0)
-            return m_points.front();
-        if (index >= m_points.size())
-            return m_points.back();
-        return m_points[index];
-    }
-    void sortPoints()
-    {
-        choc::sorting::stable_sort(
-            m_points.begin(), m_points.end(),
-            [](const EnvelopePoint &a, const EnvelopePoint &b) { return a.getX() < b.getX(); });
-        m_sorted = true;
-    }
-    int currentPointIndex = -1;
-    void updateCurrentPointIndex(double t)
-    {
-        int newIndex = currentPointIndex;
-        if (t < m_points.front().getX())
-            newIndex = 0;
-        else if (t > m_points.back().getX())
-            newIndex = m_points.size() - 1;
-        else
-        {
-            for (int i = 0; i < m_points.size(); ++i)
-            {
-                if (t >= m_points[i].getX())
-                {
-                    newIndex = i;
-                }
-            }
-        }
-
-        if (newIndex != currentPointIndex)
-        {
-            currentPointIndex = newIndex;
-            // std::cout << "update current point index to " << currentPointIndex << " at tpos " <<
-            // t
-            //           << "\n";
-        }
-    }
-    double getValueAtPosition(double pos, double sr)
-    {
-        if (!m_sorted)
-            sortPoints();
-        processBlock(pos, sr, 2);
-        return outputBlock[0];
-    }
-    // interpolate_mode :
-    // 0 : sample accurately interpolates into the outputBlock
-    // 1 : fills the output block with the same sampled value from the envelope at the timepos
-    // 2 : sets only the first outputBlock element into the sampled value from the envelope at the
-    // timepos, useful if you really know you are never going to care about about the other array
-    // elements
-    void processBlock(double timepos, double samplerate, int interpolate_mode)
-    {
-        // behavior would be undefined if the envelope points are not sorted or if no points
-        assert(m_sorted && m_points.size() > 0);
-        if (currentPointIndex == -1 || timepos < m_points[currentPointIndex].getX() ||
-            timepos >= getPointSafe(currentPointIndex + 1).getX())
-        {
-            updateCurrentPointIndex(timepos);
-        }
-
-        int index0 = currentPointIndex;
-        assert(index0 >= 0);
-        auto &pt0 = getPointSafe(index0);
-        auto &pt1 = getPointSafe(index0 + 1);
-        double x0 = pt0.getX();
-        double x1 = pt1.getX();
-        double y0 = pt0.getY();
-        double y1 = pt1.getY();
-        if (interpolate_mode > 0)
-        {
-            double outvalue = x0;
-            double xdiff = x1 - x0;
-            if (xdiff < 0.00001)
-                outvalue = y1;
-            else
-            {
-                double ydiff = y1 - y0;
-                outvalue = y0 + ydiff * ((1.0 / xdiff * (timepos - x0)));
-            }
-            if (interpolate_mode == 1)
-            {
-                for (int i = 0; i < BLOCK_SIZE; ++i)
-                {
-                    outputBlock[i] = outvalue;
-                }
-            }
-            else
-                outputBlock[0] = outvalue;
-
-            return;
-        }
-        assert(samplerate > 0.0);
-        const double invsr = 1.0 / samplerate;
-        auto shape = pt0.getShape();
-        for (int i = 0; i < BLOCK_SIZE; ++i)
-        {
-            double outvalue = x0;
-            double xdiff = x1 - x0;
-            if (xdiff < 0.00001)
-                outvalue = y1;
-            else
-            {
-                double ydiff = y1 - y0;
-                double normpos = ((1.0 / xdiff * (timepos - x0)));
-                normpos = Envelope::getShapedValue(normpos, shape, 0.0, 0.0);
-                outvalue = y0 + ydiff * normpos;
-            }
-            outputBlock[i] = outvalue;
-            timepos += invsr;
-            // we may get to the next envelope point within the block, so
-            // advance and update as needed
-            if (timepos >= x1)
-            {
-                ++index0;
-                auto &tpt0 = getPointSafe(index0);
-                auto &tpt1 = getPointSafe(index0 + 1);
-                x0 = tpt0.getX();
-                x1 = tpt1.getX();
-                y0 = tpt0.getY();
-                y1 = tpt1.getY();
-                shape = tpt0.getShape();
-            }
-        }
-    }
-
-  private:
-    std::vector<EnvelopePoint> m_points;
-    bool m_sorted = false;
-};
 
 struct CrossThreadMessage
 {
@@ -718,5 +580,57 @@ struct clap_event_xen_string
     int32_t target;
     // owned by host, do not free, do not cache, do not mutate
     // only immediately use or copy the contents
-    char* str;
+    char *str;
+};
+
+#define XENAKIOS_AUDIOBUFFER_MSG 60001
+
+struct clap_event_xen_audiobuffer
+{
+    clap_event_header header;
+    int32_t target;
+    double *buffer;
+    int32_t numchans;
+    int32_t numframes;
+    int32_t samplerate;
+};
+
+#define XENAKIOS_ROUTING_MSG 60002
+
+struct clap_event_xen_audiorouting
+{
+    clap_event_header header;
+    int32_t target;
+    // 0 clear all, 1 apply default, 2 connect src to dest, 3 disconnect src from dest
+    int32_t opcode;
+    int32_t src;
+    int32_t dest;
+};
+
+template <typename ValueType, bool EndExclusive = true> class NumericRange
+{
+  public:
+    ValueType start = ValueType{};
+    ValueType end = ValueType{};
+    NumericRange() = default;
+    NumericRange(ValueType startValue) : start{startValue}, end{start} {}
+    NumericRange(ValueType startValue, ValueType endValue) : start{startValue}, end{endValue}
+    {
+        assert(endValue > startValue);
+    }
+
+    constexpr bool isEmpty() const noexcept { return start == end; }
+    constexpr bool lessThanEnd(ValueType x) const
+    {
+        if constexpr (EndExclusive)
+            return x < end;
+        else
+            return x <= end;
+    }
+    constexpr bool contains(ValueType x) const noexcept { return x >= start && lessThanEnd(x); }
+    constexpr ValueType getLength() const noexcept { return end - start; }
+    constexpr NumericRange<ValueType> withLength(ValueType length)
+    {
+        return NumericRange<ValueType>(start, start + length);
+    }
 };

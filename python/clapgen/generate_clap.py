@@ -18,7 +18,7 @@ params = [
 ]
 
 num_audio_input_ports = 0
-num_audio_output_ports = 0
+num_audio_output_ports = 1
 
 usechocwebview = False
 
