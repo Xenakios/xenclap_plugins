@@ -133,8 +133,13 @@ struct $PLUGINCLASSNAME$
         }
         return false;
     }
-    bool implementsAudioPorts() const noexcept override { return true; }
-    uint32_t audioPortsCount(bool isInput) const noexcept override { return 1; }
+    bool implementsAudioPorts() const noexcept override { return $HAS_AUDIO_PORTS$ }
+    uint32_t audioPortsCount(bool isInput) const noexcept override 
+    { 
+        if (isInput)
+            return $AUDIO_INPUT_PORTS_COUNT$; 
+        return $AUDIO_OUTPUT_PORTS_COUNT$;
+    }
     bool audioPortsInfo(uint32_t index, bool isInput,
                         clap_audio_port_info *info) const noexcept override
     {

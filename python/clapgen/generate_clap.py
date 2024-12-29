@@ -17,6 +17,9 @@ params = [
     },
 ]
 
+num_audio_input_ports = 0
+num_audio_output_ports = 0
+
 usechocwebview = False
 
 outfilename = "generated.cpp"
@@ -39,6 +42,18 @@ with open(r"C:\develop\xen_clap_plugins\python\clapgen\template.cpp", "r") as in
         clapid += 1000
     transformed = transformed.replace("// $INITPARAMETERMETADATA$", parsection)
 
+    transformed = transformed.replace(
+        "$AUDIO_INPUT_PORTS_COUNT$", str(num_audio_input_ports)
+    )
+    transformed = transformed.replace(
+        "$AUDIO_OUTPUT_PORTS_COUNT$", str(num_audio_output_ports)
+    )
+    if num_audio_output_ports > 0 or num_audio_input_ports > 0:
+        transformed = transformed.replace("$HAS_AUDIO_PORTS$", "true;")
+
+    else:
+        transformed = transformed.replace("$HAS_AUDIO_PORTS$", "false;")
+    
     with open(
         f"C:\\develop\\xen_clap_plugins\\python\\clapgen\\{outfilename}", "w"
     ) as outfile:
