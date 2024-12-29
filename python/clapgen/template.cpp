@@ -40,8 +40,10 @@ struct $PLUGINCLASSNAME$
     : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                    clap::helpers::CheckingLevel::Maximal>
 {
+    // $PARAMETERENUMSECTION$
     std::vector<ParamDesc> paramDescriptions;
     std::vector<float> paramValues;
+    std::vector<float> paramMods;
     std::unordered_map<clap_id, float *> idToParamPointerMap;
     std::unordered_map<clap_id, float *> idToParamModPointerMap;
     double sampleRate = 0.0f;
@@ -53,11 +55,14 @@ struct $PLUGINCLASSNAME$
         // $INITPARAMETERMETADATA$
 
         paramValues.resize(paramDescriptions.size());
+        paramMods.resize(paramDescriptions.size());
         for (size_t i = 0; i < paramDescriptions.size(); ++i)
         {
             auto &pd = paramDescriptions[i];
             paramValues[i] = pd.defaultVal;
+            paramMods[i] = 0.0f;
             idToParamPointerMap[pd.id] = &paramValues[i];
+            idToParamModPointerMap[pd.id] = &paramMods[i];
         }
     }
     bool activate(double sampleRate_, uint32_t minFrameCount,
@@ -260,16 +265,9 @@ struct $PLUGINCLASSNAME$
 };
 
 const char *features[] = {CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
-clap_plugin_descriptor desc = {CLAP_VERSION,
-                               "com.mycompany.donothing",
-                               "mycompany DoNothing",
-                               "mycompany",
-                               "",
-                               "",
-                               "",
-                               "0.0.0",
-                               "mycompany donothing",
-                               features};
+clap_plugin_descriptor desc = {
+    CLAP_VERSION, "$PLUGIN_ID$", "mycompany DoNothing", "mycompany", "", "",
+    "",           "0.0.0",       "mycompany donothing", features};
 
 static const clap_plugin *clap_create_plugin(const clap_plugin_factory *f, const clap_host *host,
                                              const char *plugin_id)
