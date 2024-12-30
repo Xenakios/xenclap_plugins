@@ -91,15 +91,16 @@ source/main.cpp
 target_link_libraries(TestingProgram PRIVATE noiseplethora fmt)
 target_compile_definitions(TestingProgram PRIVATE NOJUCE=1 _USE_MATH_DEFINES=1 __WINDOWS_WASAPI__)
 
+# libs/MTS-ESP/Client/libMTSClient.cpp
 add_library(GeneratedPlugin MODULE
-libs/MTS-ESP/Client/libMTSClient.cpp
 python/clapgen/gritnoise.cpp
-
 )
 
+add_library(mts-esp-client STATIC libs/MTS-ESP/Client/libMTSClient.cpp)
+
 set_target_properties(GeneratedPlugin PROPERTIES SUFFIX ".clap" PREFIX "")
-target_compile_definitions(GeneratedPlugin PRIVATE _USE_MATH_DEFINES=1 IS_WIN=1)
-target_link_libraries(GeneratedPlugin PRIVATE fmt)
+target_compile_definitions(GeneratedPlugin PRIVATE  WIN32_LEAN_AND_MEAN NOMINMAX _USE_MATH_DEFINES=1 IS_WIN=1  )
+target_link_libraries(GeneratedPlugin PRIVATE fmt mts-esp-client)
 set(products_folder ${CMAKE_BINARY_DIR})
 set(build_type ${CMAKE_BUILD_TYPE})
 add_custom_command(

@@ -4,16 +4,23 @@
 #include "clap/helpers/host-proxy.hh"
 #include "clap/helpers/host-proxy.hxx"
 #include "clap/plugin-features.h"
+#include "containers/choc_Value.h"
+#include "gui/choc_MessageLoop.h"
 #include "sst/basic-blocks/params/ParamMetadata.h"
 #include "containers/choc_SingleReaderSingleWriterFIFO.h"
 #include "audio/choc_SampleBuffers.h"
 #include <chrono>
 #include <cstdint>
+
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include "../../source/xap_utils.h"
 #include "../../source/xapdsp.h"
 #include "libMTSClient.h"
+#include "text/choc_JSON.h"
+#include "threading/choc_SpinLock.h"
+#include <windows.h>
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
 
@@ -85,7 +92,6 @@ class GritNoiseEngine
 struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandler::Terminate,
                                                 clap::helpers::CheckingLevel::Maximal>
 {
-    // $PARAMETERENUMSECTION$
     std::vector<ParamDesc> paramDescriptions;
     std::vector<float> paramValues;
     std::vector<float> paramMods;
@@ -114,7 +120,7 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
         paramDescriptions.push_back(make_simple_parameter_desc(
             "Grit density", (clap_id)ParId::GritDensity, 0.0, 1.0, 0.8, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
-            "Pulse decay", (clap_id)ParId::GritDecay, 0.0, 1.0, 0.0, "%"));
+            "Pulse decay", (clap_id)ParId::GritDecay, 0.0, 1.0, 0.5, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
             "Filter 1 cutoff", (clap_id)ParId::Filt1CutOff, 24.0, 120.0, 60.0, "semitones"));
         paramDescriptions.push_back(make_simple_parameter_desc(
@@ -133,22 +139,34 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
             paramValues[i] = pd.defaultVal;
             paramMods[i] = 0.0f;
             idToParamPointerMap[pd.id] = &paramValues[i];
-            
+
             idToParamModPointerMap[pd.id] = &paramMods[i];
         }
-        mts = MTS_RegisterClient();
+        // mtsModule = LoadLibraryA(R"(C:\Program Files\Common Files\MTS-ESP\LIBMTS.dll)");
+        // assert(false);
     }
+    HMODULE mtsModule = NULL;
+    choc::messageloop::Timer timer;
     ~GritNoise()
     {
         if (mts)
             MTS_DeregisterClient(mts);
+        if (mtsModule)
+            FreeLibrary(mtsModule);
     }
     bool activate(double sampleRate_, uint32_t minFrameCount,
                   uint32_t maxFrameCount) noexcept override
     {
+        timer = choc::messageloop::Timer(5000, [this]() {
+            if (!mts)
+            {
+                mts = MTS_RegisterClient();
+            }
+            return false;
+        });
         if (!mts)
         {
-            mts = MTS_RegisterClient();
+            // mts = MTS_RegisterClient();
         }
 
         sampleRate = sampleRate_;
@@ -166,6 +184,91 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
             MTS_DeregisterClient(mts);
             mts = nullptr;
         }
+    }
+    clap_process_status process(const clap_process *process) noexcept override
+    {
+        std::lock_guard<choc::threading::SpinLock> lockGuard(spinLock);
+        bool mtsAvailable = mts && MTS_HasMaster(mts);
+        auto frameCount = process->frames_count;
+        if (process->audio_inputs_count > 0 && process->audio_inputs)
+        {
+            float *ip[2];
+            ip[0] = &process->audio_inputs->data32[0][0];
+            ip[1] = &process->audio_inputs->data32[1][0];
+            for (int i = 0; i < frameCount; ++i)
+            {
+                ip[0][i] = 0.0f;
+                ip[1][i] = 0.0f;
+            }
+        }
+
+        float *op[2];
+        op[0] = &process->audio_outputs->data32[0][0];
+        op[1] = &process->audio_outputs->data32[1][0];
+
+        auto inEvents = process->in_events;
+        auto inEventsSize = inEvents->size(inEvents);
+
+        // just do a simple subchunking here without a ringbuffer etc
+        const clap_event_header_t *nextEvent{nullptr};
+        uint32_t nextEventIndex{0};
+        if (inEventsSize != 0)
+        {
+            nextEvent = inEvents->get(inEvents, nextEventIndex);
+        }
+        uint32_t chunkSize = 32;
+        uint32_t pos = 0;
+
+        while (pos < frameCount)
+        {
+            uint32_t adjChunkSize = std::min(chunkSize, frameCount - pos);
+            while (nextEvent && nextEvent->time < pos + adjChunkSize)
+            {
+                auto iev = inEvents->get(inEvents, nextEventIndex);
+                handleNextEvent(iev, false);
+                nextEventIndex++;
+                if (nextEventIndex >= inEventsSize)
+                    nextEvent = nullptr;
+                else
+                    nextEvent = inEvents->get(inEvents, nextEventIndex);
+            }
+            gritEngine.setGrit(*idToParamPointerMap[(clap_id)ParId::GritDensity]);
+            gritEngine.setDecay(*idToParamPointerMap[(clap_id)ParId::GritDecay]);
+            float cutOffLeft = *idToParamPointerMap[(clap_id)ParId::Filt1CutOff];
+            float cutOffRight = *idToParamPointerMap[(clap_id)ParId::Filt2CutOff];
+
+            bool usemts = *idToParamPointerMap[(clap_id)ParId::MTSEnabled] > 0.5f;
+
+            if (usemts && mtsAvailable)
+            {
+                float tuning_adjustLeft = 0.0f;
+                float tuning_adjustRight = 0.0f;
+                tuning_adjustLeft = MTS_RetuningInSemitones(mts, (char)cutOffLeft, 0);
+                cutOffLeft = (int)cutOffLeft + tuning_adjustLeft;
+                cutOffLeft = std::clamp(cutOffLeft, 24.0f, 127.0f);
+                tuning_adjustRight = MTS_RetuningInSemitones(mts, (char)cutOffRight, 0);
+                cutOffRight = (int)cutOffRight + tuning_adjustRight;
+                cutOffRight = std::clamp(cutOffRight, 24.0f, 127.0f);
+            }
+            float res = *idToParamPointerMap[(clap_id)ParId::Filt1Reson];
+            filters[0].setCoeff(cutOffLeft, res, 1.0 / sampleRate);
+            res = *idToParamPointerMap[(clap_id)ParId::Filt2Reson];
+            filters[1].setCoeff(cutOffRight, res, 1.0 / sampleRate);
+
+            for (int i = 0; i < adjChunkSize; ++i)
+            {
+                float outsample = gritEngine.getNext();
+                float dummy = 0.0;
+                float filteredLeft = outsample;
+                float filteredRight = outsample;
+                filters[0].step<StereoSimperSVF::LP>(filters[0], filteredLeft, dummy);
+                filters[1].step<StereoSimperSVF::LP>(filters[1], filteredRight, dummy);
+                op[0][pos + i] = filteredLeft * 0.5;
+                op[1][pos + i] = filteredRight * 0.5;
+            }
+            pos += adjChunkSize;
+        }
+        return CLAP_PROCESS_CONTINUE;
     }
     bool implementsParams() const noexcept override { return true; }
     bool isValidParamId(clap_id paramId) const noexcept override
@@ -294,97 +397,77 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
         return;
     }
 
-    clap_process_status process(const clap_process *process) noexcept override
-    {
-        auto frameCount = process->frames_count;
-        if (process->audio_inputs_count > 0 && process->audio_inputs)
-        {
-            float *ip[2];
-            ip[0] = &process->audio_inputs->data32[0][0];
-            ip[1] = &process->audio_inputs->data32[1][0];
-            for (int i = 0; i < frameCount; ++i)
-            {
-                ip[0][i] = 0.0f;
-                ip[1][i] = 0.0f;
-            }
-        }
-
-        float *op[2];
-        op[0] = &process->audio_outputs->data32[0][0];
-        op[1] = &process->audio_outputs->data32[1][0];
-
-        auto inEvents = process->in_events;
-        auto inEventsSize = inEvents->size(inEvents);
-
-        // just do a simple subchunking here without a ringbuffer etc
-        const clap_event_header_t *nextEvent{nullptr};
-        uint32_t nextEventIndex{0};
-        if (inEventsSize != 0)
-        {
-            nextEvent = inEvents->get(inEvents, nextEventIndex);
-        }
-        uint32_t chunkSize = 32;
-        uint32_t pos = 0;
-
-        while (pos < frameCount)
-        {
-            uint32_t adjChunkSize = std::min(chunkSize, frameCount - pos);
-            while (nextEvent && nextEvent->time < pos + adjChunkSize)
-            {
-                auto iev = inEvents->get(inEvents, nextEventIndex);
-                handleNextEvent(iev, false);
-                nextEventIndex++;
-                if (nextEventIndex >= inEventsSize)
-                    nextEvent = nullptr;
-                else
-                    nextEvent = inEvents->get(inEvents, nextEventIndex);
-            }
-            gritEngine.setGrit(*idToParamPointerMap[(clap_id)ParId::GritDensity]);
-            gritEngine.setDecay(*idToParamPointerMap[(clap_id)ParId::GritDecay]);
-            float cutOffLeft = *idToParamPointerMap[(clap_id)ParId::Filt1CutOff];
-            float cutOffRight = *idToParamPointerMap[(clap_id)ParId::Filt2CutOff];
-
-            bool usemts = *idToParamPointerMap[(clap_id)ParId::MTSEnabled] > 0.5f;
-
-            if (usemts && mts && MTS_HasMaster(mts))
-            {
-                float tuning_adjustLeft = 0.0f;
-                float tuning_adjustRight = 0.0f;
-                tuning_adjustLeft = MTS_RetuningInSemitones(mts, (char)cutOffLeft, 0);
-                cutOffLeft = (int)cutOffLeft + tuning_adjustLeft;
-                cutOffLeft = std::clamp(cutOffLeft, 24.0f, 127.0f);
-                tuning_adjustRight = MTS_RetuningInSemitones(mts, (char)cutOffRight, 0);
-                cutOffRight = (int)cutOffRight + tuning_adjustRight;
-                cutOffRight = std::clamp(cutOffRight, 24.0f, 127.0f);
-            }
-            float res = *idToParamPointerMap[(clap_id)ParId::Filt1Reson];
-            filters[0].setCoeff(cutOffLeft, res, 1.0 / sampleRate);
-            res = *idToParamPointerMap[(clap_id)ParId::Filt2Reson];
-            filters[1].setCoeff(cutOffRight, res, 1.0 / sampleRate);
-
-            for (int i = 0; i < adjChunkSize; ++i)
-            {
-                float outsample = gritEngine.getNext();
-                float dummy = 0.0;
-                float filteredLeft = outsample;
-                float filteredRight = outsample;
-                filters[0].step<StereoSimperSVF::LP>(filters[0], filteredLeft, dummy);
-                filters[1].step<StereoSimperSVF::LP>(filters[1], filteredRight, dummy);
-                op[0][pos + i] = filteredLeft * 0.5;
-                op[1][pos + i] = filteredRight * 0.5;
-            }
-            pos += adjChunkSize;
-        }
-        return CLAP_PROCESS_CONTINUE;
-    }
     bool implementsState() const noexcept override { return true; }
     bool stateSave(const clap_ostream *stream) noexcept override
     {
-        uint32_t version = 0;
-        stream->write(stream, &version, sizeof(uint32_t));
+        auto stateOb = choc::value::createObject("state");
+        stateOb.setMember("version", 1);
+        auto paramsArr = choc::value::createEmptyArray();
+        for (auto &pd : paramDescriptions)
+        {
+            int64_t id = pd.id;
+            auto it = idToParamPointerMap.find(pd.id);
+            if (it != idToParamPointerMap.end())
+            {
+                float val = *(it->second);
+                auto paramOb = choc::value::createObject("param");
+                paramOb.setMember("id", id);
+                paramOb.setMember("val", val);
+                paramsArr.addArrayElement(paramOb);
+            }
+        }
+        stateOb.setMember("parameters", paramsArr);
+        auto json = choc::json::toString(stateOb, true);
+        if (json.size() > 0)
+        {
+            if (stream->write(stream, json.data(), json.size()) != -1)
+                return true;
+        }
+
+        return false;
+    }
+    bool stateLoad(const clap_istream *stream) noexcept override
+    {
+        std::string json;
+        constexpr size_t bufsize = 4096;
+        json.reserve(bufsize);
+        unsigned char buf[bufsize];
+        memset(buf, 0, bufsize);
+        while (true)
+        {
+            auto read = stream->read(stream, buf, bufsize);
+            if (read == 0)
+                break;
+            if (read < 0)
+                return false;
+            for (size_t i = 0; i < read; ++i)
+                json.push_back(buf[i]);
+        }
+        // DBG("volume deserialized json is\n" << json);
+        if (json.size() > 0)
+        {
+            auto val = choc::json::parseValue(json);
+            if (val.isObject() && val.hasObjectMember("version") && val["version"].get<int>() >= 1)
+            {
+                auto parArr = val["parameters"];
+                for (int i = 0; i < parArr.size(); ++i)
+                {
+                    auto parOb = parArr[i];
+                    int64_t id = parOb["id"].getInt64();
+                    float val = parOb["val"].get<float>();
+                    auto it = idToParamPointerMap.find(id);
+                    if (it != idToParamPointerMap.end())
+                    {
+                        // the raw parameters are not atomic, so...
+                        std::lock_guard<choc::threading::SpinLock> lockGuard(spinLock);
+                        *(it->second) = val;
+                    }
+                }
+            }
+        }
         return true;
     }
-    bool stateLoad(const clap_istream *stream) noexcept override { return true; }
+    choc::threading::SpinLock spinLock;
     bool implementsGui() const noexcept override { return false; }
     bool guiIsApiSupported(const char *api, bool isFloating) noexcept override { return false; }
     // virtual bool guiGetPreferredApi(const char **api, bool *is_floating) noexcept { return false;
