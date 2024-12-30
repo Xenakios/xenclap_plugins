@@ -133,8 +133,10 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
             paramValues[i] = pd.defaultVal;
             paramMods[i] = 0.0f;
             idToParamPointerMap[pd.id] = &paramValues[i];
+            
             idToParamModPointerMap[pd.id] = &paramMods[i];
         }
+        mts = MTS_RegisterClient();
     }
     ~GritNoise()
     {
