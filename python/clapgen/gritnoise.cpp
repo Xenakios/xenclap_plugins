@@ -142,39 +142,25 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
 
             idToParamModPointerMap[pd.id] = &paramMods[i];
         }
-        // mtsModule = LoadLibraryA(R"(C:\Program Files\Common Files\MTS-ESP\LIBMTS.dll)");
-        // assert(false);
     }
-    HMODULE mtsModule = NULL;
-    choc::messageloop::Timer timer;
+
     ~GritNoise()
     {
         if (mts)
             MTS_DeregisterClient(mts);
-        if (mtsModule)
-            FreeLibrary(mtsModule);
     }
     bool activate(double sampleRate_, uint32_t minFrameCount,
                   uint32_t maxFrameCount) noexcept override
     {
-        timer = choc::messageloop::Timer(5000, [this]() {
-            if (!mts)
-            {
-                mts = MTS_RegisterClient();
-            }
-            return false;
-        });
         if (!mts)
         {
-            // mts = MTS_RegisterClient();
+            mts = MTS_RegisterClient();
         }
 
         sampleRate = sampleRate_;
         gritEngine.setSampleRate(sampleRate_);
         for (auto &f : filters)
             f.init();
-
-        // std::this_thread::sleep_for (std::chrono::seconds(1));
         return true;
     }
     void deactivate() noexcept override
