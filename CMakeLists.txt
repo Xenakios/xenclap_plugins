@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.15)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 include_directories(
     libs/clap/include
     libs/clap-helpers/include
@@ -90,8 +92,9 @@ target_link_libraries(TestingProgram PRIVATE noiseplethora fmt)
 target_compile_definitions(TestingProgram PRIVATE NOJUCE=1 _USE_MATH_DEFINES=1 __WINDOWS_WASAPI__)
 
 add_library(GeneratedPlugin MODULE
-python/clapgen/gritnoise.cpp
 libs/MTS-ESP/Client/libMTSClient.cpp
+python/clapgen/gritnoise.cpp
+
 )
 
 set_target_properties(GeneratedPlugin PROPERTIES SUFFIX ".clap" PREFIX "")
