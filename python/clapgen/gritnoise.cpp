@@ -35,7 +35,7 @@ class GritNoiseGUI
         opts.enableDebugMode = true;
         m_webview = std::make_unique<choc::ui::WebView>(opts);
 
-        // m_webview->navigate(R"(C:\develop\xen_clap_plugins\source\noiseplethora2.html)");
+        m_webview->navigate(R"(C:\develop\xen_clap_plugins\python\clapgen\gui.html)");
     }
     std::unique_ptr<choc::ui::WebView> m_webview;
 
@@ -532,16 +532,16 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
     }
 };
 
-const char *features[] = {CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
+const char *features[] = {CLAP_PLUGIN_FEATURE_GLITCH, nullptr};
 clap_plugin_descriptor desc = {CLAP_VERSION,
                                "com.xenakios.gritnoise",
-                               "mycompany DoNothing",
-                               "mycompany",
+                               "GritNoise",
+                               "Xenakios",
                                "",
                                "",
                                "",
                                "0.0.0",
-                               "mycompany donothing",
+                               "Xenakios GritNoise",
                                features};
 
 static const clap_plugin *clap_create_plugin(const clap_plugin_factory *f, const clap_host *host,
