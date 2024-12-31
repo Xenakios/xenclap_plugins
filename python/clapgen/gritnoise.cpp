@@ -21,8 +21,26 @@
 #include "text/choc_JSON.h"
 #include "threading/choc_SpinLock.h"
 #include <windows.h>
+#include "gui/choc_WebView.h"
 
 using ParamDesc = sst::basic_blocks::params::ParamMetaData;
+
+class GritNoiseGUI
+{
+  public:
+    GritNoiseGUI()
+
+    {
+        choc::ui::WebView::Options opts;
+        opts.enableDebugMode = true;
+        m_webview = std::make_unique<choc::ui::WebView>(opts);
+
+        // m_webview->navigate(R"(C:\develop\xen_clap_plugins\source\noiseplethora2.html)");
+    }
+    std::unique_ptr<choc::ui::WebView> m_webview;
+
+  private:
+};
 
 ParamDesc make_simple_parameter_desc(std::string name, clap_id id, double minvalue, double maxvalue,
                                      double defaultvalue, std::string units)
@@ -454,16 +472,45 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
         return true;
     }
     choc::threading::SpinLock spinLock;
-    bool implementsGui() const noexcept override { return false; }
-    bool guiIsApiSupported(const char *api, bool isFloating) noexcept override { return false; }
+    std::unique_ptr<GritNoiseGUI> m_gui;
+    bool implementsGui() const noexcept override { return true; }
+    bool guiIsApiSupported(const char *api, bool isFloating) noexcept override
+    {
+        if (strcmp(api, "win32") == 0)
+            return true;
+        return false;
+    }
     // virtual bool guiGetPreferredApi(const char **api, bool *is_floating) noexcept { return false;
     // }
-    bool guiCreate(const char *api, bool isFloating) noexcept override { return false; }
-    void guiDestroy() noexcept override {}
+    bool guiCreate(const char *api, bool isFloating) noexcept override
+    {
+        m_gui = std::make_unique<GritNoiseGUI>();
+        return true;
+    }
+    void guiDestroy() noexcept override { m_gui = nullptr; }
     // virtual bool guiSetScale(double scale) noexcept { return false; }
-    bool guiShow() noexcept override { return false; }
-    bool guiHide() noexcept override { return false; }
-    bool guiGetSize(uint32_t *width, uint32_t *height) noexcept override { return false; }
+    bool guiShow() noexcept override
+    {
+        if (!m_gui)
+            return false;
+        return true;
+    }
+    bool guiHide() noexcept override
+    {
+        if (!m_gui)
+            return false;
+        return true;
+    }
+    int guiw = 500;
+    int guih = 200;
+    bool guiGetSize(uint32_t *width, uint32_t *height) noexcept override
+    {
+        if (!m_gui)
+            return false;
+        *width = guiw;
+        *height = guih;
+        return true;
+    }
     // virtual bool guiCanResize() const noexcept { return false; }
     // virtual bool guiGetResizeHints(clap_gui_resize_hints_t *hints) noexcept { return false; }
     bool guiAdjustSize(uint32_t *width, uint32_t *height) noexcept override
@@ -472,8 +519,17 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
     }
     // virtual bool guiSetSize(uint32_t width, uint32_t height) noexcept { return false; }
     // virtual void guiSuggestTitle(const char *title) noexcept {}
-    bool guiSetParent(const clap_window *window) noexcept override { return false; }
-    // virtual bool guiSetTransient(const clap_window *window) noexcept { return false; }
+    bool guiSetParent(const clap_window *window) noexcept override
+    {
+        if (!m_gui)
+            return false;
+        SetParent((HWND)m_gui->m_webview->getViewHandle(), (HWND)window->win32);
+        ShowWindow((HWND)m_gui->m_webview->getViewHandle(), SW_SHOWNA);
+        SetWindowPos((HWND)m_gui->m_webview->getViewHandle(), NULL, 0, 0, guiw, guih,
+                     SWP_SHOWWINDOW);
+
+        return true;
+    }
 };
 
 const char *features[] = {CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
