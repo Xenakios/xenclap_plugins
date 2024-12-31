@@ -118,7 +118,8 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
     double sampleRate = 0.0f;
     GritNoiseEngine gritEngine;
     std::array<StereoSimperSVF, 2> filters;
-    int padding[16] = {};
+    int lowestReasonablePitch = 24;
+    int highestReasonablePitch = 127;
     MTSClient *mts = nullptr;
     enum class ParId
     {
@@ -136,15 +137,15 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
 
     {
         paramDescriptions.push_back(make_simple_parameter_desc(
-            "Grit density", (clap_id)ParId::GritDensity, 0.0, 1.0, 0.8, "%"));
+            "Grit density", (clap_id)ParId::GritDensity, 0.0, 100.0, 0.3, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
             "Pulse decay", (clap_id)ParId::GritDecay, 0.0, 1.0, 0.5, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
-            "Filter 1 cutoff", (clap_id)ParId::Filt1CutOff, 24.0, 120.0, 60.0, "semitones"));
+            "Filter 1 cutoff", (clap_id)ParId::Filt1CutOff, 24.0, 120.0, 60.0, "keys"));
         paramDescriptions.push_back(make_simple_parameter_desc(
             "Filter 1 resonance", (clap_id)ParId::Filt1Reson, 0.0, 1.0, 0.0, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
-            "Filter 2 cutoff", (clap_id)ParId::Filt2CutOff, 24.0, 120.0, 60.0, "semitones"));
+            "Filter 2 cutoff", (clap_id)ParId::Filt2CutOff, 24.0, 120.0, 60.0, "keys"));
         paramDescriptions.push_back(make_simple_parameter_desc(
             "Filter 2 resonance", (clap_id)ParId::Filt2Reson, 0.0, 1.0, 0.0, "%"));
         paramDescriptions.push_back(make_simple_parameter_desc(
@@ -236,7 +237,7 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
                 else
                     nextEvent = inEvents->get(inEvents, nextEventIndex);
             }
-            gritEngine.setGrit(*idToParamPointerMap[(clap_id)ParId::GritDensity]);
+            gritEngine.setGrit((*idToParamPointerMap[(clap_id)ParId::GritDensity]) * 0.1f);
             gritEngine.setDecay(*idToParamPointerMap[(clap_id)ParId::GritDecay]);
             float cutOffLeft = *idToParamPointerMap[(clap_id)ParId::Filt1CutOff];
             float cutOffRight = *idToParamPointerMap[(clap_id)ParId::Filt2CutOff];
@@ -533,16 +534,9 @@ struct GritNoise : public clap::helpers::Plugin<clap::helpers::MisbehaviourHandl
 };
 
 const char *features[] = {CLAP_PLUGIN_FEATURE_GLITCH, nullptr};
-clap_plugin_descriptor desc = {CLAP_VERSION,
-                               "com.xenakios.gritnoise",
-                               "GritNoise",
-                               "Xenakios",
-                               "",
-                               "",
-                               "",
-                               "0.0.0",
-                               "Xenakios GritNoise",
-                               features};
+clap_plugin_descriptor desc = {
+    CLAP_VERSION, "com.xenakios.gritnoise", "GritNoise", "Xenakios", "", "", "",
+    "0.0.0",      "Xenakios GritNoise",     features};
 
 static const clap_plugin *clap_create_plugin(const clap_plugin_factory *f, const clap_host *host,
                                              const char *plugin_id)
